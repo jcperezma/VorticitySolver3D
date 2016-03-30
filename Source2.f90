@@ -283,15 +283,17 @@
 
     end subroutine updateBoundary
 
-    
+
     subroutine computeVelocities(f, u, nx, ny, nz, hx)
-    double precision f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3)! 
+    implicit none
+    double precision, dimension(:,:,:,:),allocatable :: f, u
+    !double precision f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3)! 
     double precision hx, xCoeff(3), yCoeff(3), zCoeff(3), error
     integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
     ! Computes the components of the velocity from the stream function derivatives
-    ! assumes uniform grid; hx=hy=hz, though to change this is really easy.
-    ! I tested it with simple functions and with the functions used by liu and the max error is 0.25%
-    
+    ! assumes a uniform grid; hx=hy=hz, though to change this is really easy.
+    ! I tested it with simple functions and with the functions used by liu the max error is 0.25%
+
     do i=1,nx+1
         if(i .EQ. 1) then
             indexX =1   ! 0
@@ -318,7 +320,7 @@
             xCoeff(2) = -0.5
             xCoeff(3) = 0.5
         endif
-         do j=1,ny+1
+        do j=1,ny+1
             if(j .EQ. 1) then
                 indexY=1   ! 0
                 !Forward difference
@@ -344,7 +346,7 @@
                 yCoeff(2) = -0.5
                 yCoeff(3) = 0.5
             endif
-             do k=1,nz+1
+            do k=1,nz+1
                 if(k .EQ. 1) then
                     indexZ=1   ! 0
                     !Forward difference
@@ -356,11 +358,11 @@
                 elseif (k .EQ. nz+1) then
                     !Backward difference
                     indexZ =nz+1 ! 0
-                iz = nz      ! -1   
-                iz2 = nz-1   ! -2
-                zCoeff(1) = 3.0/2.0
-                zCoeff(2) = -2.0
-                zCoeff(3) = 0.50
+                    iz = nz      ! -1   
+                    iz2 = nz-1   ! -2
+                    zCoeff(1) = 3.0/2.0
+                    zCoeff(2) = -2.0
+                    zCoeff(3) = 0.50
                 else
                     !central difference
                     indexZ = k  !0  1
@@ -371,12 +373,12 @@
                     zCoeff(3) = 0.5
                 endif
                 u(indexX, indexY, indexZ,1) = ( yCoeff(1)*f(indexX,indexY,indexZ,3)+ yCoeff(2)*f(indexX,iy,indexZ,3) + yCoeff(3)*f(indexX,iy2,indexZ,3) &
-                                            - ( zCoeff(1)*f(indexX,indexY,indexZ,2)+ zCoeff(2)*f(indexX,indexY,iz,2) + zCoeff(3)*f(indexX,indexY,iz2,2) ) )/hx
+                - ( zCoeff(1)*f(indexX,indexY,indexZ,2)+ zCoeff(2)*f(indexX,indexY,iz,2) + zCoeff(3)*f(indexX,indexY,iz2,2) ) )/hx
                 u(indexX, indexY, indexZ,2) = ( zCoeff(1)*f(indexX,indexY,indexZ,1)+ zCoeff(2)*f(indexX,indexY,iz,1) + zCoeff(3)*f(indexX,indexY,iz2,1)&
-                                            - ( xCoeff(1)*f(indexX,indexY,indexZ,3)+ xCoeff(2)*f(ix,indexY,indexZ,3) + xCoeff(3)*f(ix2,indexY,indexZ,3) ) )/hx
+                - ( xCoeff(1)*f(indexX,indexY,indexZ,3)+ xCoeff(2)*f(ix,indexY,indexZ,3) + xCoeff(3)*f(ix2,indexY,indexZ,3) ) )/hx
                 u(indexX, indexY, indexZ,3) = ( xCoeff(1)*f(indexX,indexY,indexZ,2)+ xCoeff(2)*f(ix,indexY,indexZ,2) + xCoeff(3)*f(ix2,indexY,indexZ,2) &
-                                            - ( yCoeff(1)*f(indexX,indexY,indexZ,1)+ yCoeff(2)*f(indexX,iy,indexZ,1) + yCoeff(3)*f(indexX,iy2,indexZ,1) ) )/hx
-    
+                - ( yCoeff(1)*f(indexX,indexY,indexZ,1)+ yCoeff(2)*f(indexX,iy,indexZ,1) + yCoeff(3)*f(indexX,iy2,indexZ,1) ) )/hx
+
             enddo
         enddo
     enddo
@@ -385,7 +387,77 @@
     end subroutine computeVelocities
 
 
+    subroutine computeLaplacian(vt, nx, ny, nz, hx, hy, hz, laplacian)
+    double precision, dimension(:,:,:,:),allocatable :: vt, laplacian
+    double precision hx, hy, hz
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
 
 
+    ! Need to compute the laplacian just for inner nodes, and eventually if we have periodic conditions
+    ! need to evaluate it in the periodic boundaries. 
+    do ix=2,nx
+        do iy=2,ny
+            do iz=2,nz
+                do i=1,3
+                    laplacian(ix,iy,iz,i)= ( -2*vt(ix,iy,iz,i)+vt(ix-1,iy,iz,i)+vt(ix+1,iy,iz,i)  ) / hx**2 &
+                                          +( -2*vt(ix,iy,iz,i)+vt(ix,iy-1,iz,i)+vt(ix,iy+1,iz,i)  ) / hx**2 &
+                                          +( -2*vt(ix,iy,iz,i)+vt(ix,iy,iz-1,i)+vt(ix,iy,iz+1,i)  ) / hx**2 
+                enddo
+            enddo
+        enddo
+    enddo
+    
+    ! the computation over the inner nodes seems ok. I tested it with the function from Liu.
 
+    end subroutine computeLaplacian
+    
+    subroutine computeConvectiveTerm(vt, u, conv, nx, ny, nz, hx, hy, hz)
+    double precision, dimension(:,:,:,:),allocatable :: vt, u, conv
+    double precision hx, hy, hz
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
+
+
+    ! Compute the convective term for the inner nodes, eventually I need to do this for the periodic 
+    ! boundaries
+    do ix=2,nx
+        do iy=2,ny
+            do iz=2,nz
+                !X component
+                conv(ix,iy,iz,1) =  u(ix,iy,iz,2)  * 0.5 *( vt(ix,iy+1,iz,1) - vt(ix,iy-1,iz,1)  )/hx  &   !     U_2 * dW_1/dy 
+								 + vt(ix,iy,iz,1)  * 0.5 *(  u(ix,iy+1,iz,2) -  u(ix,iy-1,iz,2)  )/hx  &   !   + W_1 * dU_2/dy 
+                                - ( u(ix,iy,iz,1)  * 0.5 *( vt(ix,iy+1,iz,2) - vt(ix,iy-1,iz,2)  )/hx  &   !   -(U_1 * dW_2/dy 
+                                +  vt(ix,iy,iz,2)  * 0.5 *(  u(ix,iy+1,iz,1) -  u(ix,iy-1,iz,1)  )/hx) &   !   + W_2 * dU_1/dy)
+                                -(  u(ix,iy,iz,1)  * 0.5 *( vt(ix,iy,iz+1,3) - vt(ix,iy,iz-1,3)  )/hx  &   !   -(U_1 * dW_3/dz
+				                +  vt(ix,iy,iz,3)  * 0.5 *(  u(ix,iy,iz+1,1) -  u(ix,iy,iz-1,1)  )/hx  &   !   + W_3 * dU_1/dz
+                                - ( u(ix,iy,iz,3)  * 0.5 *( vt(ix,iy,iz+1,1) - vt(ix,iy,iz-1,1)  )/hx  &   !   -(U_3 * dW_1/dz 
+                                +  vt(ix,iy,iz,1)  * 0.5 *(  u(ix,iy,iz+1,3) -  u(ix,iy,iz-1,3)  )/hx) )   !   + W_1 * dU_3/dz))
+                
+                !Y component
+                conv(ix,iy,iz,2) =  u(ix,iy,iz,3)  * 0.5 *( vt(ix,iy,iz+1,2) - vt(ix,iy,iz-1,2)  )/hx  &   !     U_3 * dW_2/dz 
+								 + vt(ix,iy,iz,2)  * 0.5 *(  u(ix,iy,iz+1,3) -  u(ix,iy,iz-1,3)  )/hx  &   !   + W_2 * dU_3/dz 
+                                - ( u(ix,iy,iz,2)  * 0.5 *( vt(ix,iy,iz+1,3) - vt(ix,iy,iz-1,3)  )/hx  &   !   -(U_2 * dW_3/dz 
+                                +  vt(ix,iy,iz,3)  * 0.5 *(  u(ix,iy,iz+1,2) -  u(ix,iy,iz-1,2)  )/hx) &   !   + W_3 * dU_2/dz)
+                                -(  u(ix,iy,iz,2)  * 0.5 *( vt(ix+1,iy,iz,1) - vt(ix-1,iy,iz,1)  )/hx  &   !   -(U_2 * dW_1/dx
+				                +  vt(ix,iy,iz,1)  * 0.5 *(  u(ix+1,iy,iz,2) -  u(ix-1,iy,iz,2)  )/hx  &   !   + W_1 * dU_2/dx
+                                - ( u(ix,iy,iz,1)  * 0.5 *( vt(ix+1,iy,iz,2) - vt(ix-1,iy,iz,2)  )/hx  &   !   -(U_1 * dW_2/dx 
+                                +  vt(ix,iy,iz,2)  * 0.5 *(  u(ix+1,iy,iz,1) -  u(ix-1,iy,iz,1)  )/hx) )   !   + W_2 * dU_1/dx))
+                
+                !Z component
+                conv(ix,iy,iz,3) =  u(ix,iy,iz,1)  * 0.5 *( vt(ix+1,iy,iz,3) - vt(ix-1,iy,iz,3)  )/hx  &   !     U_1 * dW_3/dx 
+								 + vt(ix,iy,iz,3)  * 0.5 *(  u(ix+1,iy,iz,1) -  u(ix-1,iy,iz,1)  )/hx  &   !   + W_3 * dU_1/dx 
+                                - ( u(ix,iy,iz,3)  * 0.5 *( vt(ix+1,iy,iz,1) - vt(ix-1,iy,iz,1)  )/hx  &   !   -(U_3 * dW_1/dx 
+                                +  vt(ix,iy,iz,1)  * 0.5 *(  u(ix+1,iy,iz,3) -  u(ix-1,iy,iz,3)  )/hx) &   !   + W_1 * dU_3/dx)
+                                -(  u(ix,iy,iz,3)  * 0.5 *( vt(ix,iy+1,iz,2) - vt(ix,iy-1,iz,2)  )/hx  &   !   -(U_3 * dW_2/dy
+				                +  vt(ix,iy,iz,2)  * 0.5 *(  u(ix,iy+1,iz,3) -  u(ix,iy-1,iz,3)  )/hx  &   !   + W_2 * dU_3/dy
+                                - ( u(ix,iy,iz,2)  * 0.5 *( vt(ix,iy+1,iz,3) - vt(ix,iy-1,iz,3)  )/hx  &   !   -(U_2 * dW_3/dy 
+                                +  vt(ix,iy,iz,3)  * 0.5 *(  u(ix,iy+1,iz,2) -  u(ix,iy-1,iz,2)  )/hx) )   !   + W_3 * dU_2/dy))
+            
+            enddo
+        enddo
+    enddo
+    
+    ! the computation over the inner nodes seems ok. I tested it with the function from Liu.
+
+    end subroutine computeConvectiveTerm
+    
     end module poissonSolveJacobi

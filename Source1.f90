@@ -5,6 +5,7 @@
     use mkl_dfti
     use mkl_poisson
     use poissonSolveJacobi
+    use tests
     implicit none
     integer nx,ny,nz, frame
     ! Note that the size of the transform nx must be even !!!
@@ -27,10 +28,13 @@
     integer :: STATUS = 0
            
     ! For 3D Problems
-     double precision f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3), err(nx+1,ny+1,nz+1,3) ! for 3D
+     double precision, dimension(:,:,:,:),allocatable  :: f, u, vt, vtnew, err! for 3D
      !double precision bd_ax((ny+1),(nz+1)), bd_bx((ny+1),(nz+1)), bd_ay((nx+1),(nz+1)), bd_by((nx+1),(nz+1)), bd_az((nx+1),(ny+1)), bd_bz((nx+1),(ny+1)) for 3D   
      !character(6) BCtype 
      !double precision dpar(5*(nx+ny)/2+9)
+     
+     allocate(f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3), err(nx+1,ny+1,nz+1,3))
+     
      
     dt = 0.0002
     t=0
@@ -78,98 +82,10 @@
     
     
     !******************** Test Unit **********************************
-    
-    ! compute stream function components
-    error = 0
-    do iy=1,ny+1
-        do ix=1,nx+1
-            do iz = 1,nz+1 !for 3D
-                do i = 1,3
-                xi=hx*(ix-1)/lx
-                yi=hy*(iy-1)/ly
-                zi=hz*(iz-1)/lz
-                f(ix,iy,iz,1)=  sin(pi*yi)*sin(pi*zi) ! right hand side ! yi**2+zi**2  !
-                f(ix,iy,iz,2)=  sin(pi*zi)*sin(pi*xi) ! right hand side ! xi**2+zi**2  !
-                f(ix,iy,iz,3)=  sin(pi*xi)*sin(pi*yi) ! right hand side ! xi**2+yi**2  !
-                
-                !vt(ix,iy,iz,i)=0
-                !vtnew(ix,iy,iz,i)=0
-                !u(ix,iy,iz,i)=0
-                enddo
-            enddo
-        enddo
-    enddo
-    print*, error
-    ! find the velocity from the stream function
-    
-    call computeVelocities(f, u, nx, ny, nz, hx)
-    
-    ! Compute error
-    error =0
-    do iy=1,ny+1
-        do ix=1,nx+1
-            do iz = 1,nz+1 !for 3D
-                !do i = 1,3
-                xi=hx*(ix-1)/lx
-                yi=hy*(iy-1)/ly
-                zi=hz*(iz-1)/lz
-                err(ix,iy,iz,1) = abs( u(ix,iy,iz,1) -( pi*sin(pi*xi)*cos(pi*yi) - pi *sin(pi*xi) * cos(pi*zi) ) ) ! abs( u(ix,iy,iz,1)-(2*yi-2*zi) )
-                err(ix,iy,iz,2) = abs( u(ix,iy,iz,2)-(2*zi-2*xi) ) ! abs( u(ix,iy,iz,2)-(2*zi-2*xi) )
-                err(ix,iy,iz,3) = abs( u(ix,iy,iz,3)-(2*xi-2*yi) ) ! abs( u(ix,iy,iz,3)-(2*xi-2*yi) )
-                
-                !f(ix,iy,iz,1)=sin(pi*yi)*sin(pi*zi) ! right hand side
-                !f(ix,iy,iz,2)=sin(pi*zi)*sin(pi*xi) ! right hand side
-                !f(ix,iy,iz,3)=sin(pi*xi)*sin(pi*yi) ! right hand side
-                
-                !vt(ix,iy,iz,i)=0
-                !vtnew(ix,iy,iz,i)=0
-                !u(ix,iy,iz,i)=0
-                !enddo
-            enddo
-        enddo
-    enddo
-    
-    ix=15
-    iy=15
-    iz=30
-    
-                xi=hx*(ix-1)/lx
-                yi=hy*(iy-1)/ly
-                zi=hz*(iz-1)/lz
-    print *, u(ix,iy,iz,1), ' ', ( pi*sin(pi*xi)*cos(pi*yi) - pi *sin(pi*xi) * cos(pi*zi) ), ' yi ', yi , ' zi ', zi 
-    
-    open(4,file='results.txt')
-    !write (4,*), ubound(hinges,1)
-
-    write (4,*), nx+1,ny+1, nz+1
-    write (4,*), hx,hy,hz
-    do ix=1,nx+1
-        do iy=1,ny+1
-            do iz=1,nz+1
-            write(4,*) err(ix,iy,iz,1)
-            enddo
-        enddo
-    enddo
-    close(4)          
-    
-    open(4,file='results2.txt')
-    !write (4,*), ubound(hinges,1)
-
-    write (4,*), nx+1,ny+1, nz+1
-    write (4,*), hx,hy,hz
-    do ix=1,nx+1
-        do iy=1,ny+1
-            do iz=1,nz+1
-            write(4,*) u(ix,iy,iz,1)
-            enddo
-        enddo
-    enddo
-    close(4) 
-    
-    print*, error
+    call testLaplacian(f, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
+   
     print *, 'This program is going to exit.'
     call EXIT(STATUS)
-    
       !******************** end of Test Unit **********************************  
 
     ! Initialize all variables
