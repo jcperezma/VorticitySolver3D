@@ -385,7 +385,108 @@
 
 
     end subroutine computeVelocities
+    
+    subroutine nablaCross(f, u, nx, ny, nz, hx)
+    implicit none
+    double precision, dimension(:,:,:,:),allocatable :: f, u
+    !double precision f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3)! 
+    double precision hx, xCoeff(3), yCoeff(3), zCoeff(3), error
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
+    ! Computes the components of the velocity from the stream function derivatives
+    ! assumes a uniform grid; hx=hy=hz, though to change this is really easy.
+    ! I tested it with simple functions and with the functions used by liu the max error is 0.25%
 
+    do i=1,nx+1
+        if(i .EQ. 1) then
+            indexX =1   ! 0
+            !Forward difference
+            ix = 2      ! 1
+            ix2 = 3     ! 2
+            xCoeff(1) = -3.0/2.0
+            xCoeff(2) = 2.0
+            xCoeff(3) = -0.50
+        elseif(i .EQ. nx+1) then
+            !Backward difference
+            indexX =nx+1 ! 0
+            ix = nx      ! -1   
+            ix2 = nx-1   ! -2
+            xCoeff(1) = 3.0/2.0
+            xCoeff(2) = -2.0
+            xCoeff(3) = 0.50
+        else
+            !Central difference 
+            indexX = i  !0   1
+            ix =i-1     !-1  2
+            ix2 = i+1   !1   3
+            xCoeff(1) = 0
+            xCoeff(2) = -0.5
+            xCoeff(3) = 0.5
+        endif
+        do j=1,ny+1
+            if(j .EQ. 1) then
+                indexY=1   ! 0
+                !Forward difference
+                iy = 2      ! 1
+                iy2 = 3     ! 2
+                yCoeff(1) = -3.0/2.0
+                yCoeff(2) = 2.0
+                yCoeff(3) = -0.50
+            elseif(j .EQ. ny+1) then
+                !Backward difference
+                indexY =ny+1 ! 0
+                iy = ny      ! -1   
+                iy2 = ny-1   ! -2
+                yCoeff(1) = 3.0/2.0
+                yCoeff(2) = -2.0
+                yCoeff(3) = 0.50
+            else
+                !Central difference
+                indexY = j  !0   1
+                iy =j-1     !-1  2
+                iy2 = j+1   !1   3
+                yCoeff(1) = 0
+                yCoeff(2) = -0.5
+                yCoeff(3) = 0.5
+            endif
+            do k=1,nz+1
+                if(k .EQ. 1) then
+                    indexZ=1   ! 0
+                    !Forward difference
+                    iz = 2      ! 1
+                    iz2 = 3     ! 2
+                    zCoeff(1) = -3.0/2.0
+                    zCoeff(2) = 2.0
+                    zCoeff(3) = -0.50
+                elseif (k .EQ. nz+1) then
+                    !Backward difference
+                    indexZ =nz+1 ! 0
+                    iz = nz      ! -1   
+                    iz2 = nz-1   ! -2
+                    zCoeff(1) = 3.0/2.0
+                    zCoeff(2) = -2.0
+                    zCoeff(3) = 0.50
+                else
+                    !central difference
+                    indexZ = k  !0  1
+                    iz =k-1     !-1 2
+                    iz2 = k+1   !1  3
+                    zCoeff(1) = 0
+                    zCoeff(2) = -0.5
+                    zCoeff(3) = 0.5
+                endif
+                u(indexX, indexY, indexZ,1) = ( yCoeff(1)*f(indexX,indexY,indexZ,3)+ yCoeff(2)*f(indexX,iy,indexZ,3) + yCoeff(3)*f(indexX,iy2,indexZ,3) &
+                - ( zCoeff(1)*f(indexX,indexY,indexZ,2)+ zCoeff(2)*f(indexX,indexY,iz,2) + zCoeff(3)*f(indexX,indexY,iz2,2) ) )/hx
+                u(indexX, indexY, indexZ,2) = ( zCoeff(1)*f(indexX,indexY,indexZ,1)+ zCoeff(2)*f(indexX,indexY,iz,1) + zCoeff(3)*f(indexX,indexY,iz2,1)&
+                - ( xCoeff(1)*f(indexX,indexY,indexZ,3)+ xCoeff(2)*f(ix,indexY,indexZ,3) + xCoeff(3)*f(ix2,indexY,indexZ,3) ) )/hx
+                u(indexX, indexY, indexZ,3) = ( xCoeff(1)*f(indexX,indexY,indexZ,2)+ xCoeff(2)*f(ix,indexY,indexZ,2) + xCoeff(3)*f(ix2,indexY,indexZ,2) &
+                - ( yCoeff(1)*f(indexX,indexY,indexZ,1)+ yCoeff(2)*f(indexX,iy,indexZ,1) + yCoeff(3)*f(indexX,iy2,indexZ,1) ) )/hx
+
+            enddo
+        enddo
+    enddo
+
+
+    end subroutine nablaCross
 
     subroutine computeLaplacian(vt, nx, ny, nz, hx, hy, hz, laplacian)
     double precision, dimension(:,:,:,:),allocatable :: vt, laplacian
@@ -411,11 +512,11 @@
 
     end subroutine computeLaplacian
     
-    subroutine computeConvectiveTerm(vt, u, conv, nx, ny, nz, hx, hy, hz)
+    subroutine computeConvectiveTermDirect(vt, u, conv, nx, ny, nz, hx, hy, hz)
     double precision, dimension(:,:,:,:),allocatable :: vt, u, conv
     double precision hx, hy, hz
     integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
-
+    !I tested it with the function used by Liu the results had less than 0.1% of error
 
     ! Compute the convective term for the inner nodes, eventually I need to do this for the periodic 
     ! boundaries
@@ -458,6 +559,35 @@
     
     ! the computation over the inner nodes seems ok. I tested it with the function from Liu.
 
-    end subroutine computeConvectiveTerm
+    end subroutine computeConvectiveTermDirect
     
+    subroutine computeConvectiveTermStreamFunction(f, u, conv, nx, ny, nz, hx, hy, hz)
+    double precision, dimension(:,:,:,:),allocatable :: f, u, conv, vt, WxU
+    double precision hx, hy, hz
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
+    allocate(WxU(nx+1,ny+1,nz+1,3) )
+    ! by now We already have the velocity computed from the stream function, 
+    ! we need to compute the vorticity from the velocity w = nabla x u
+    
+    call nablaCross(u, vt, nx, ny, nz, hx) ! here we get the vorticity
+    
+    ! Now we need to compute the cross product WxU
+    
+    do ix=2,nx
+        do iy=2,ny
+            do iz=2,nz
+              WxU(ix,iy,iz,1) = u(ix,iy,iz,3)*vt(ix,iy,iz,2) - u(ix,iy,iz,2)*vt(ix,iy,iz,3)
+              WxU(ix,iy,iz,2) = u(ix,iy,iz,1)*vt(ix,iy,iz,3) - u(ix,iy,iz,3)*vt(ix,iy,iz,1)
+              WxU(ix,iy,iz,3) = u(ix,iy,iz,2)*vt(ix,iy,iz,1) - u(ix,iy,iz,1)*vt(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    
+    ! the convective term is nabla x W x U
+    
+    
+    call nablaCross(conv, WxU, nx, ny, nz, hx)
+    
+
+    end subroutine computeConvectiveTermDirect
     end module poissonSolveJacobi

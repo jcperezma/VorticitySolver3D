@@ -82,7 +82,7 @@
     
     
     !******************** Test Unit **********************************
-    call testLaplacian(f, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
+    call testConvectiveTermComputation(f, u, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
    
     print *, 'This program is going to exit.'
     call EXIT(STATUS)
