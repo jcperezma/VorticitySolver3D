@@ -82,7 +82,7 @@
     
     
     !******************** Test Unit **********************************
-    call testConvectiveTermComputation(f, u, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
+    call testConvTermComputationSF(f, u, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
    
     print *, 'This program is going to exit.'
     call EXIT(STATUS)
