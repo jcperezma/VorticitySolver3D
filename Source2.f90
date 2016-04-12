@@ -108,37 +108,308 @@
 
     end subroutine solvePoisson3DVorticity
 
+    subroutine solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, i, errorTol)
 
-    subroutine updateBoundary(f, vt, vtnew, u, nx, ny, nz, hx)
-    double precision f(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3),u(nx+1,ny+1,nz+1,3) ! 
-    double precision errorTol, error, hx
+    double precision f(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3) ! 
+    double precision errorTol, error, hx, fxterm , fzterm 
     integer nx,ny,nz, maxIter, i, iter, ix, iy, iz
-    ! use U and f to compute the vorticity at the boundaries
+    ! i is the component
+
+    !Solves the poisson equation in 3d using SOR. the SOR factor is 1.5
+    !assumes a uniform grid, that is hx=hy=hz
+
+
+    do iter = 1 , maxIter
+        vt=f;
+        ! update inner nodes
+        do ix=2,nx
+            do iy=2,ny
+                do iz=2,nz
+                    f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + f(ix-1,iy,iz,i)+f(ix+1,iy,iz,i) + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                    +  f(ix,iy,iz-1,i) +f(ix,iy,iz+1,i) )+ (1 - 1.5) * f(ix,iy,iz,i)
+                enddo
+            enddo
+        enddo
+
+        ! update nodes at the periodic walls
+
+        ! x=0 
+        ! forward difference with respect of X
+        ix =1
+        do iy=2,ny ! the stream function is defined at the Y faces
+            do iz=1,nz+1
+
+                if (iz .eq. 1) then
+                    fzterm =  f(ix,iy,2,i) +f(ix,iy,nz,i) 
+
+                elseif(iz .eq. nz+1) then
+                    fzterm =  f(ix,iy,2,i) +f(ix,iy,nz,i)  
+                else
+                    fzterm =  f(ix,iy,iz-1,i) +f(ix,iy,iz+1,i)
+                endif
+
+                f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + f(nx,iy,iz,i)+f(2,iy,iz,i) + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                +  fzterm )+ (1 - 1.5) * f(ix,iy,iz,i)
+            enddo
+        enddo
+
+        ! x=1 
+        ix =nx+1
+        do iy=2,ny ! the stream function is defined at the Y faces
+            do iz=1,nz+1
+                if (iz .eq. 1) then
+                    fzterm =  f(ix,iy,2,i) +f(ix,iy,nz,i) 
+
+                elseif(iz .eq. nz+1) then
+                    fzterm =  f(ix,iy,2,i) +f(ix,iy,nz,i)  
+                else
+                    fzterm =  f(ix,iy,iz-1,i) +f(ix,iy,iz+1,i)
+                endif
+
+                f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + f(nx,iy,iz,i)+f(2,iy,iz,i) + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                +  fzterm )+ (1 - 1.5) * f(ix,iy,iz,i)
+            enddo
+        enddo
+
+        ! z = 0
+        iz =1
+        do ix=1,nx+1
+            do iy=2,ny    
+                if (ix .eq. 1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i) 
+
+                elseif(ix .eq. nz+1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i)  
+                else
+                    fxterm =  f(ix-1,iy,iz,i) +f(ix+1,iy,iz,i)
+                endif
+                f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + fxterm + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                + f(ix,iy,nz,i) +f(ix,iy,2,i)  )+ (1 - 1.5) * f(ix,iy,iz,i)
+            enddo
+        enddo 
+
+        ! z = 1
+        iz =nz+1
+        do ix=1,nx+1
+            do iy=2,ny    
+                if (ix .eq. 1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i) 
+
+                elseif(ix .eq. nx+1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i)  
+                else
+                    fxterm =  f(ix-1,iy,iz,i) +f(ix+1,iy,iz,i)
+                endif
+                f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + fxterm + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                + f(ix,iy,nz,i) +f(ix,iy,2,i)  )+ (1 - 1.5) * f(ix,iy,iz,i)
+            enddo
+        enddo 
+
+
+
+        ! update boundary nodes for the normal component with a neumann boundary condition df/dn =0  f(1) - f(-1) = 0
+
+
+
+
+
+        SELECT CASE (i) ! select component
+        CASE (5)
+            ! x component 
+            ! x=0 
+            ix =1
+            do iy=2,ny
+                do iz=2,nz
+                    f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + 2*f(ix+1,iy,iz,i) + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                    +  f(ix,iy,iz-1,i) +f(ix,iy,iz+1,i) )+ (1 - 1.5) * f(ix,iy,iz,i)
+                enddo
+            enddo
+
+            ! x=1
+            ix = nx+1
+            do iy=2,ny
+                do iz=2,nz
+                    f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + 2*f(ix-1,iy,iz,i) + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                    +  f(ix,iy,iz-1,i) +f(ix,iy,iz+1,i) )+ (1 - 1.5) * f(ix,iy,iz,i)
+                enddo
+            enddo
+
+
+        CASE (2)
+            ! y component 
+            ! y = 0
+            iy =1
+            do ix=1,nx+1
+                do iz=1,nz+1    
+                    if (ix .eq. 1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i) 
+
+                elseif(ix .eq. nx+1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i)  
+                else
+                    fxterm =  f(ix-1,iy,iz,i) +f(ix+1,iy,iz,i)
+                endif
+                
+                if (iz .eq. 1) then
+                    fzterm =  f(ix,iy,nz,i) +f(ix,iy,2,i) 
+
+                elseif(iz .eq. nz+1) then
+                    fzterm =  f(ix,iy,nz,i) +f(ix,iy,2,i)  
+                else
+                    fzterm =  f(ix,iy,iz+1,i) +f(ix,iy,iz-1,i)
+                endif
+                
+                    f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + fxterm + 2 * f(ix,iy+1,iz,i)  &
+                    + fzterm )+ (1 - 1.5) * f(ix,iy,iz,i)
+                enddo
+            enddo 
+            ! y = 1
+            iy =ny+1
+            do ix=1,nx+1
+                do iz=1,nz+1
+                    if (ix .eq. 1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i) 
+
+                elseif(ix .eq. nx+1) then
+                    fxterm =  f(2,iy,iz,i) +f(nx,iy,iz,i)  
+                else
+                    fxterm =  f(ix-1,iy,iz,i) +f(ix+1,iy,iz,i)
+                endif
+                
+                if (iz .eq. 1) then
+                    fzterm =  f(ix,iy,nz,i) +f(ix,iy,2,i) 
+
+                elseif(iz .eq. nz+1) then
+                    fzterm =  f(ix,iy,nz,i) +f(ix,iy,2,i)  
+                else
+                    fzterm =  f(ix,iy,iz-1,i) +f(ix,iy,iz+1,i)
+                endif
+                
+                    f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + fxterm + 2 *f(ix,iy-1,iz,i)  &
+                    + fzterm )+ (1 - 1.5) * f(ix,iy,iz,i)
+                enddo
+            enddo  
+
+        CASE (6)
+            ! z component
+            ! z = 0
+            iz =1
+            do ix=2,nx
+                do iy=2,ny                        
+                    f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + f(ix-1,iy,iz,i)+f(ix+1,iy,iz,i) + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                    + 2 *f(ix,iy,iz+1,i) )+ (1 - 1.5) * f(ix,iy,iz,i)
+                enddo
+            enddo 
+            ! z = 1
+            iz =nz+1
+            do ix=2,nx
+                do iy=2,ny                        
+                    f(ix,iy,iz,i)  = 1.5 * 0.16666 * ( hx*hx * vtnew(ix,iy,iz,i) + f(ix-1,iy,iz,i)+f(ix+1,iy,iz,i) + f(ix,iy-1,iz,i)+f(ix,iy+1,iz,i)  &
+                    + 2 *f(ix,iy,iz-1,i) )+ (1 - 1.5) * f(ix,iy,iz,i)
+                enddo
+            enddo     
+
+        END SELECT
+
+        error = 0 
+
+        do iy=1,ny+1
+            do ix=1,nx+1
+                do iz=1,nz+1 
+                    error = error + abs(vt(ix,iy,iz,i) - f(ix,iy,iz,i))
+                enddo
+            enddo
+        enddo
+
+        !print *, ' error ' , error 
+        if (error .lt. errorTol) EXIT 
+
+
+    enddo
+
+
+
+    end subroutine solvePoisson3DVorticityPer
+
+    subroutine updateBoundary(f, vt, u, nx, ny, nz, hx)
+    double precision f(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3),u(nx+1,ny+1,nz+1,3) ! 
+    double precision errorTol, error, hx, dfdx, dfdy, dfdz
+    integer nx,ny,nz, maxIter, i, iter, ix, iy, iz
+    ! use U and f to compute the vorticity at the boundaries, 
+    ! U here is the velocity at the boundaries, I am wasting tons of memory but I shouldnt worry about memory for now.
+
     !!!!!!!!!!!!!!!!!!!!!!!!!!!! For faces Z =const !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! for face Z =0
     ! normal component for this face is 3
     ! for inner nodes   
     iz = 1
-    do iy=2,ny
-        do ix=2,nx
-            vt(ix,iy,iz,3) = 0.5/hx* ( u(ix+1,iy,iz,2) - u(ix-1,iy,iz,2) - u(ix,iy+1,iz,1) + u(ix,iy-1,iz,1) )
+    do iy=1,ny+1
+        do ix=1,nx+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (u(ix,iy+1,iz,1) -  u(ix,iy,iz,1))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (u(ix,iy,iz,1) -  u(ix,iy-1,iz,1))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(u(ix,iy+1,iz,1) -  u(ix,iy-1,iz,1))/hx
+            endif
+
+
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (u(ix+1,iy,iz,2) -  u(ix,iy,iz,2))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (u(ix,iy,iz,2) -  u(ix-1,iy,iz,2))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(u(ix+1,iy,iz,2) -  u(ix-1,iy,iz,2))/hx
+            endif
+
+            vt(ix,iy,iz,3) = dfdx-dfdy ! du_2/dx - du_1/dy
         enddo
     enddo
 
     ! tangential components are 1 and 2
     ! Component 1
     ! inner nodes
-    do iy=2,ny
-        do ix=2,nx
-            vt(ix,iy,iz,1) = -2* f(ix,iy,iz+1,1) / hx**2 + 2/hx* ( (f(ix+1,iy,iz,3) - f(ix-1,iy,iz,3))/(2*hx) + u(ix,iy,iz,2))
+    do iy=1,ny+1
+        do ix=1,nx+1
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (f(ix+1,iy,iz,3) -  f(ix,iy,iz,3))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (f(ix,iy,iz,3) -  f(ix-1,iy,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(f(ix+1,iy,iz,3) -  f(ix-1,iy,iz,3))/hx
+            endif
+
+            !vt(ix,iy,iz,1) = -2* f(ix,iy,iz+1,1) / hx**2 + 2/hx* ( (f(ix+1,iy,iz,3) - f(ix-1,iy,iz,3))/(2*hx) + u(ix,iy,iz,2))
+            vt(ix,iy,iz,1) = -2* f(ix,iy,iz+1,1) / hx**2 + 2/hx* ( dfdx + u(ix,iy,iz,2))
         enddo
     enddo
 
     ! Component 2
-    ! inner nodes
-    do iy=2,ny
-        do ix=2,nx
-            vt(ix,iy,iz,1) = -2* f(ix,iy,iz+1,2) / hx**2 + 2/hx* ( (f(ix,iy+1,iz,3) - f(ix,iy-1,iz,3))/(2*hx) - u(ix,iy,iz,1))
+    ! all nodes
+    do iy=1,ny+1
+        do ix=1,nx+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (f(ix,iy+1,iz,3) -  f(ix,iy,iz,3))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (f(ix,iy,iz,3) -  f(ix,iy-1,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(f(ix,iy+1,iz,3) -  f(ix,iy-1,iz,3))/hx
+            endif
+
+            !vt(ix,iy,iz,1) = -2* f(ix,iy,iz+1,2) / hx**2 + 2/hx* ( (f(ix,iy+1,iz,3) - f(ix,iy-1,iz,3))/(2*hx) - u(ix,iy,iz,1))
+            vt(ix,iy,iz,1) = -2* f(ix,iy,iz+1,2) / hx**2 + 2/hx* ( dfdy - u(ix,iy,iz,1))
         enddo
     enddo
 
@@ -147,54 +418,148 @@
     ! normal component for this face is 3
     ! for inner nodes   
     iz = nz+1
-    do iy=2,ny
-        do ix=2,nx
-            vt(ix,iy,iz,3) = 0.5/hx* ( u(ix+1,iy,iz,2) - u(ix-1,iy,iz,2) - u(ix,iy+1,iz,1) + u(ix,iy-1,iz,1) )
+    do iy=1,ny+1
+        do ix=1,nx+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (u(ix,iy+1,iz,1) -  u(ix,iy,iz,1))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (u(ix,iy,iz,1) -  u(ix,iy-1,iz,1))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(u(ix,iy+1,iz,1) -  u(ix,iy-1,iz,1))/hx
+            endif
+
+
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (u(ix+1,iy,iz,2) -  u(ix,iy,iz,2))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (u(ix,iy,iz,2) -  u(ix-1,iy,iz,2))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(u(ix+1,iy,iz,2) -  u(ix-1,iy,iz,2))/hx
+            endif
+
+            vt(ix,iy,iz,3) = dfdx-dfdy ! du_2/dx - du_1/dy
         enddo
     enddo
 
     ! tangential components are 1 and 2
     ! Component 1
     ! inner nodes
-    do iy=2,ny
-        do ix=2,nx
-            vt(ix,iy,iz,1) = -2* f(ix,iy,iz-1,1) / hx**2 - 2/hx* ( (f(ix+1,iy,iz,3) - f(ix-1,iy,iz,3))/(2*hx) + u(ix,iy,iz,2))
+    do iy=1,ny+1
+        do ix=1,nx+1
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (f(ix+1,iy,iz,3) -  f(ix,iy,iz,3))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (f(ix,iy,iz,3) -  f(ix-1,iy,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(f(ix+1,iy,iz,3) -  f(ix-1,iy,iz,3))/hx
+            endif
+
+            !vt(ix,iy,iz,1) = -2* f(ix,iy,iz-1,1) / hx**2 - 2/hx* ( (f(ix+1,iy,iz,3) - f(ix-1,iy,iz,3))/(2*hx) + u(ix,iy,iz,2))
+            vt(ix,iy,iz,1) = -2* f(ix,iy,iz-1,1) / hx**2 - 2/hx* ( dfdx + u(ix,iy,iz,2))
         enddo
     enddo
 
     ! Component 2
     ! inner nodes
-    do iy=2,ny
-        do ix=2,nx
-            vt(ix,iy,iz,1) = -2* f(ix,iy,iz-1,2) / hx**2 - 2/hx* ( (f(ix,iy+1,iz,3) - f(ix,iy-1,iz,3))/(2*hx) - u(ix,iy,iz,1))
+    do iy=1,ny+1
+        do ix=1,nx+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (f(ix,iy+1,iz,3) -  f(ix,iy,iz,3))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (f(ix,iy,iz,3) -  f(ix,iy-1,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(f(ix,iy+1,iz,3) -  f(ix,iy-1,iz,3))/hx
+            endif
+            !vt(ix,iy,iz,1) = -2* f(ix,iy,iz-1,2) / hx**2 - 2/hx* ( (f(ix,iy+1,iz,3) - f(ix,iy-1,iz,3))/(2*hx) - u(ix,iy,iz,1))
+            vt(ix,iy,iz,1) = -2* f(ix,iy,iz-1,2) / hx**2 - 2/hx* ( dfdy - u(ix,iy,iz,1))       
         enddo
     enddo
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!! For faces X =const !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! for face X =0
     ! normal component for this face is 1
-    ! for inner nodes   
+    ! for all nodes   
     ix = 1
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,1) = 0.5/hx* ( u(ix,iy+1,iz,3) - u(ix,iy-1,iz,3) - u(ix,iy,iz+1,2) + u(ix,iy,iz-1,2) )
+    do iy=1,ny+1
+        do iz=1,nz+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (u(ix,iy+1,iz,3) -  u(ix,iy,iz,3))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (u(ix,iy,iz,3) -  u(ix,iy-1,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(u(ix,iy+1,iz,3) -  u(ix,iy-1,iz,3))/hx
+            endif
+
+
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (u(ix,iy,iz+1,2) -  u(ix,iy,iz,2))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (u(ix,iy,iz,2) -  u(ix,iy,iz-1,2))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(u(ix,iy,iz+1,2) -  u(ix,iy,iz-1,2))/hx
+            endif
+
+            vt(ix,iy,iz,1) = dfdy -dfdz ! du_3/dy - du_2/dz 
+            !print '(A5, f6.2, A5, f6.2, A5, f6.2 )', 'dfdy', dfdy, 'dfdz', dfdz, ' vt ', vt(ix,iy,iz,1)
+
         enddo
     enddo
 
     ! tangential components are 2 and 3
     ! Component 2
     ! inner nodes
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,2) = -2* f(ix+1,iy,iz,2) / hx**2 + 2/hx* ( (f(ix,iy+1,iz,1) - f(ix,iy-1,iz,1))/(2*hx) + u(ix,iy,iz,3))
+    do iy=1,ny+1
+        do iz=1,nz+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (f(ix,iy+1,iz,1) -  f(ix,iy,iz,1))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (f(ix,iy,iz,1) -  f(ix,iy-1,iz,1))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(f(ix,iy+1,iz,1) -  f(ix,iy-1,iz,1))/hx
+            endif
+            !vt(ix,iy,iz,2) = -2* f(ix+1,iy,iz,2) / hx**2 + 2/hx* ( (f(ix,iy+1,iz,1) - f(ix,iy-1,iz,1))/(2*hx) + u(ix,iy,iz,3))
+            vt(ix,iy,iz,2) = -2* f(ix+1,iy,iz,2) / hx**2 + 2/hx* ( dfdy + u(ix,iy,iz,3))
         enddo
     enddo
 
     ! Component 3
     ! inner nodes
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,3) = -2* f(ix+1,iy,iz,3) / hx**2 + 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) - u(ix,iy,iz,2))
+    do iy=1,ny+1
+        do iz=1,nz+1
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (f(ix,iy,iz+1,1) -  f(ix,iy,iz,1))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (f(ix,iy,iz,1) -  f(ix,iy,iz-1,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(f(ix,iy,iz+1,1) -  f(ix,iy,iz-1,1))/hx
+            endif
+
+            !vt(ix,iy,iz,3) = -2* f(ix+1,iy,iz,3) / hx**2 + 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) - u(ix,iy,iz,2))
+            vt(ix,iy,iz,3) = -2* f(ix+1,iy,iz,3) / hx**2 + 2/hx* ( dfdz - u(ix,iy,iz,2))
         enddo
     enddo
 
@@ -203,26 +568,73 @@
     ! normal component for this face is 3
     ! for inner nodes   
     ix = nx+1
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,1) = 0.5/hx* ( u(ix,iy+1,iz,3) - u(ix,iy-1,iz,3) - u(ix,iy,iz+1,2) + u(ix,iy,iz-1,2) )
+    do iy=1,ny+1
+        do iz=1,nz+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (u(ix,iy+1,iz,3) -  u(ix,iy,iz,3))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (u(ix,iy,iz,3) -  u(ix,iy-1,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(u(ix,iy+1,iz,3) -  u(ix,iy-1,iz,3))/hx
+            endif
+
+
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (u(ix,iy,iz+1,2) -  u(ix,iy,iz,2))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (u(ix,iy,iz,2) -  u(ix,iy,iz-1,2))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(u(ix,iy,iz+1,2) -  u(ix,iy,iz-1,2))/hx
+            endif
+
+            vt(ix,iy,iz,1) = dfdy -dfdz ! du_3/dy - du_2/dz 
         enddo
     enddo
 
     ! tangential components are 2 and 3
     ! Component 2
     ! inner nodes
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,2) = -2* f(ix-1,iy,iz,2) / hx**2 - 2/hx* ( (f(ix,iy+1,iz,1) - f(ix,iy-1,iz,1))/(2*hx) + u(ix,iy,iz,3))
+    do iy=1,ny+1
+        do iz=1,nz+1
+            if (iy .eq. 1)then
+                !Forward difference
+                dfdy = (f(ix,iy+1,iz,1) -  f(ix,iy,iz,1))/hx
+            elseif (iy .eq. ny+1) then
+                ! Backward Difference
+                dfdy = (f(ix,iy,iz,1) -  f(ix,iy-1,iz,1))/hx
+            else
+                ! Central Difference  
+                dfdy = 0.5*(f(ix,iy+1,iz,1) -  f(ix,iy-1,iz,1))/hx
+            endif
+
+            !vt(ix,iy,iz,2) = -2* f(ix-1,iy,iz,2) / hx**2 - 2/hx* ( (f(ix,iy+1,iz,1) - f(ix,iy-1,iz,1))/(2*hx) + u(ix,iy,iz,3))
+            vt(ix,iy,iz,2) = -2* f(ix-1,iy,iz,2) / hx**2 - 2/hx* ( dfdy + u(ix,iy,iz,3))
         enddo
     enddo
 
     ! Component 3
     ! inner nodes
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,3) = -2* f(ix-1,iy,iz,3) / hx**2 - 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) - u(ix,iy,iz,2))
+    do iy=1,ny+1
+        do iz=1,nz+1
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (f(ix,iy,iz+1,1) -  f(ix,iy,iz,1))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (f(ix,iy,iz,1) -  f(ix,iy,iz-1,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(f(ix,iy,iz+1,1) -  f(ix,iy,iz-1,1))/hx
+            endif
+
+            !vt(ix,iy,iz,3) = -2* f(ix-1,iy,iz,3) / hx**2 - 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) - u(ix,iy,iz,2))
+            vt(ix,iy,iz,3) = -2* f(ix-1,iy,iz,3) / hx**2 - 2/hx* ( dfdz - u(ix,iy,iz,2))
         enddo
     enddo
 
@@ -231,26 +643,75 @@
     ! normal component for this face is 2
     ! for inner nodes   
     iy = 1
-    do ix=2,nx
-        do iz=2,nz
-            vt(ix,iy,iz,2) = 0.5/hx* ( u(ix,iy,iz+1,1) - u(ix,iy,iz-1,1) - u(ix+1,iy,iz,3) + u(ix-1,iy,iz,3) )
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (u(ix+1,iy,iz,3) -  u(ix,iy,iz,3))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (u(ix,iy,iz,3) -  u(ix-1,iy,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(u(ix+1,iy,iz,3) -  u(ix-1,iy,iz,3))/hx
+            endif
+
+
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (u(ix,iy,iz+1,1) -  u(ix,iy,iz,1))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (u(ix,iy,iz,1) -  u(ix,iy,iz-1,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(u(ix,iy,iz+1,1) -  u(ix,iy,iz-1,1))/hx
+            endif
+
+            vt(ix,iy,iz,2) = dfdz - dfdx !du_1/dz -du_3/dx 0.5/hx* ( u(ix,iy,iz+1,1) - u(ix,iy,iz-1,1) - u(ix+1,iy,iz,3) + u(ix-1,iy,iz,3) )
+
         enddo
     enddo
 
     ! tangential components are 1 and 3
     ! Component 1
     ! inner nodes
-    do ix=2,nx
-        do iz=2,nz
-            vt(ix,iy,iz,1) = -2* f(ix,iy+1,iz,2) / hx**2 + 2/hx* ( (f(ix+1,iy,iz,2) - f(ix-1,iy,iz,2))/(2*hx) - u(ix,iy,iz,3))
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (f(ix+1,iy,iz,2) -  f(ix,iy,iz,2))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (f(ix,iy,iz,2) -  f(ix-1,iy,iz,2))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(f(ix+1,iy,iz,2) -  f(ix-1,iy,iz,2))/hx
+            endif
+
+            !vt(ix,iy,iz,1) = -2* f(ix,iy+1,iz,1) / hx**2 + 2/hx* ( (f(ix+1,iy,iz,2) - f(ix-1,iy,iz,2))/(2*hx) - u(ix,iy,iz,3))
+            vt(ix,iy,iz,1) = -2* f(ix,iy+1,iz,1) / hx**2 + 2/hx* ( dfdx - u(ix,iy,iz,3))
+            !print '(A5, f6.2, A5, f6.2, A5, f6.2 )', 'u ', u(ix,iy,iz,3), 'dfdx', hx, ' vt ', vt(ix,iy,iz,1)
         enddo
     enddo
 
     ! Component 3
-    ! inner nodes
-    do ix=2,nx
-        do iz=2,nz
-            vt(ix,iy,iz,3) = -2* f(ix,iy+1,iz,3) / hx**2 + 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) + u(ix,iy,iz,1))
+    ! all nodes
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (f(ix,iy,iz+1,1) -  f(ix,iy,iz,1))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (f(ix,iy,iz,1) -  f(ix,iy,iz-1,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(f(ix,iy,iz+1,1) -  f(ix,iy,iz-1,1))/hx
+            endif
+
+            !vt(ix,iy,iz,3) = -2* f(ix,iy+1,iz,3) / hx**2 + 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) + u(ix,iy,iz,1))
+            vt(ix,iy,iz,3) = -2* f(ix,iy+1,iz,3) / hx**2 + 2/hx* ( dfdz + u(ix,iy,iz,1))
         enddo
     enddo
 
@@ -258,31 +719,240 @@
     ! normal component for this face is 2
     ! for inner nodes   
     iy = ny+1
-    do ix=2,nx
-        do iz=2,nz
-            vt(ix,iy,iz,2) = 0.5/hx* ( u(ix,iy,iz+1,1) - u(ix,iy,iz-1,1) - u(ix+1,iy,iz,3) + u(ix-1,iy,iz,3) )
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (u(ix+1,iy,iz,3) -  u(ix,iy,iz,3))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (u(ix,iy,iz,3) -  u(ix-1,iy,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(u(ix+1,iy,iz,3) -  u(ix-1,iy,iz,3))/hx
+            endif
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (u(ix,iy,iz+1,1) -  u(ix,iy,iz,1))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (u(ix,iy,iz,1) -  u(ix,iy,iz-1,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(u(ix,iy,iz+1,1) -  u(ix,iy,iz-1,1))/hx
+            endif
+
+            vt(ix,iy,iz,2) = dfdz - dfdx !du_1/dz -du_3/dx 0.5/hx* ( u(ix,iy,iz+1,1) - u(ix,iy,iz-1,1) - u(ix+1,iy,iz,3) + u(ix-1,iy,iz,3) )
         enddo
     enddo
 
     ! tangential components are 1 and 3
     ! Component 1
     ! inner nodes
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,1) = -2* f(ix,iy-1,iz,2) / hx**2 - 2/hx* ( (f(ix+1,iy,iz,2) - f(ix-1,iy,iz,2))/(2*hx) - u(ix,iy,iz,3))
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Forward difference
+                dfdx = (f(ix+1,iy,iz,2) -  f(ix,iy,iz,2))/hx
+            elseif (ix .eq. nx+1) then
+                ! Backward Difference
+                dfdx = (f(ix,iy,iz,2) -  f(ix-1,iy,iz,2))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(f(ix+1,iy,iz,2) -  f(ix-1,iy,iz,2))/hx
+            endif
+
+            !vt(ix,iy,iz,1) = -2* f(ix,iy-1,iz,1) / hx**2 - 2/hx* ( (f(ix+1,iy,iz,2) - f(ix-1,iy,iz,2))/(2*hx) - u(ix,iy,iz,3))
+            vt(ix,iy,iz,1) = -2* f(ix,iy-1,iz,1) / hx**2 - 2/hx* ( dfdx - u(ix,iy,iz,3))
         enddo
     enddo
 
     ! Component 3
     ! inner nodes
-    do iy=2,ny
-        do iz=2,nz
-            vt(ix,iy,iz,3) = -2* f(ix,iy-1,iz,3) / hx**2 - 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) + u(ix,iy,iz,1))
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (iz .eq. 1)then
+                !Forward difference
+                dfdz = (f(ix,iy,iz+1,2) -  f(ix,iy,iz,2))/hx
+            elseif (iz .eq. nz+1) then
+                ! Backward Difference
+                dfdz = (f(ix,iy,iz,2) -  f(ix,iy,iz-1,2))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(f(ix,iy,iz+1,2) -  f(ix,iy,iz-1,2))/hx
+            endif
+
+            !vt(ix,iy,iz,3) = -2* f(ix,iy-1,iz,3) / hx**2 - 2/hx* ( (f(ix,iy,iz+1,2) - f(ix,iy,iz-1,2))/(2*hx) + u(ix,iy,iz,1))
+            vt(ix,iy,iz,3) = -2* f(ix,iy-1,iz,3) / hx**2 - 2/hx* ( dfdz + u(ix,iy,iz,1))
         enddo
     enddo
 
     end subroutine updateBoundary
 
+    subroutine updateBoundaryPer(f, vt, u, nx, ny, nz, hx)
+    double precision f(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3),u(nx+1,ny+1,nz+1,3) ! 
+    double precision errorTol, error, hx, dfdx, dfdy, dfdz
+    integer nx,ny,nz, maxIter, i, iter, ix, iy, iz
+    ! use U and f to compute the vorticity at the boundaries, 
+    ! U here is the velocity at the boundaries, I am wasting tons of memory but I shouldnt worry about memory for now.
+
+    ! This is for the case where the only boundary is in the Y faces. There is periodicity in the X and Z direction. 
+
+
+
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!! For faces Y =const !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! for face Y =0
+    ! normal component for this face is 2
+    ! for inner nodes   
+    iy = 1
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Periodic
+                dfdx = 0.5*(u(2,iy,iz,3) -  u(nx,iy,iz,3))/hx
+            elseif (ix .eq. nx+1) then
+                ! Periodic
+                dfdx = 0.5*(u(2,iy,iz,3) -  u(nx,iy,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(u(ix+1,iy,iz,3) -  u(ix-1,iy,iz,3))/hx
+            endif
+
+
+            if (iz .eq. 1)then
+                !Periodic
+                dfdz = 0.5*(u(ix,iy,2,1) -  u(ix,iy,nz,1))/hx
+            elseif (iz .eq. nz+1) then
+                !Periodic
+                dfdz = 0.5*(u(ix,iy,2,1) -  u(ix,iy,nz,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(u(ix,iy,iz+1,1) -  u(ix,iy,iz-1,1))/hx
+            endif
+
+            vt(ix,iy,iz,2) = dfdz - dfdx !du_1/dz -du_3/dx 0.5/hx* ( u(ix,iy,iz+1,1) - u(ix,iy,iz-1,1) - u(ix+1,iy,iz,3) + u(ix-1,iy,iz,3) )
+
+        enddo
+    enddo
+
+    ! tangential components are 1 and 3
+    ! Component 1
+    ! inner nodes
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Periodic
+                dfdx = 0.5*(f(2,iy,iz,2) -  f(nx,iy,iz,2))/hx
+            elseif (ix .eq. nx+1) then
+                !Periodic
+                dfdx = 0.5*(f(2,iy,iz,2) -  f(nx,iy,iz,2))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(f(ix+1,iy,iz,2) -  f(ix-1,iy,iz,2))/hx
+            endif
+
+            !vt(ix,iy,iz,1) = -2* f(ix,iy+1,iz,1) / hx**2 + 2/hx* ( (f(ix+1,iy,iz,2) - f(ix-1,iy,iz,2))/(2*hx) - u(ix,iy,iz,3))
+            vt(ix,iy,iz,1) = -2* f(ix,iy+1,iz,1) / hx**2 + 2/hx* ( dfdx - u(ix,iy,iz,3))
+            !print '(A5, f6.2, A5, f6.2, A5, f6.2 )', 'u ', u(ix,iy,iz,3), 'dfdx', hx, ' vt ', vt(ix,iy,iz,1)
+        enddo
+    enddo
+
+    ! Component 3
+    ! all nodes
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (iz .eq. 1)then
+                !Periodic
+                dfdz =  0.5*(f(ix,iy,2,1) -  f(ix,iy,nz,1))/hx
+            elseif (iz .eq. nz+1) then
+                !Periodic
+                dfdz =  0.5*(f(ix,iy,2,1) -  f(ix,iy,nz,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(f(ix,iy,iz+1,1) -  f(ix,iy,iz-1,1))/hx
+            endif
+
+            !vt(ix,iy,iz,3) = -2* f(ix,iy+1,iz,3) / hx**2 + 2/hx* ( (f(ix,iy,iz+1,1) - f(ix,iy,iz-1,1))/(2*hx) + u(ix,iy,iz,1))
+            vt(ix,iy,iz,3) = -2* (f(ix,iy+1,iz,3) -f(ix,iy,iz,3) ) / hx**2 + 2/hx* ( dfdz + u(ix,iy,iz,1))
+        enddo
+    enddo
+
+    ! for face Y =1
+    ! normal component for this face is 2
+    ! for inner nodes   
+    iy = ny+1
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Periodic
+                dfdx = 0.5*(u(2,iy,iz,3) -  u(nx,iy,iz,3))/hx
+            elseif (ix .eq. nx+1) then
+                ! Periodic
+                dfdx = 0.5*(u(2,iy,iz,3) -  u(nx,iy,iz,3))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(u(ix+1,iy,iz,3) -  u(ix-1,iy,iz,3))/hx
+            endif
+
+
+            if (iz .eq. 1)then
+                !Periodic
+                dfdz = 0.5*(u(ix,iy,2,1) -  u(ix,iy,nz,1))/hx
+            elseif (iz .eq. nz+1) then
+                !Periodic
+                dfdz = 0.5*(u(ix,iy,2,1) -  u(ix,iy,nz,1))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(u(ix,iy,iz+1,1) -  u(ix,iy,iz-1,1))/hx
+            endif
+
+            vt(ix,iy,iz,2) = dfdz - dfdx !du_1/dz -du_3/dx 0.5/hx* ( u(ix,iy,iz+1,1) - u(ix,iy,iz-1,1) - u(ix+1,iy,iz,3) + u(ix-1,iy,iz,3) )
+        enddo
+    enddo
+
+    ! tangential components are 1 and 3
+    ! Component 1
+    ! inner nodes
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (ix .eq. 1)then
+                !Periodic
+                dfdx = 0.5*(f(2,iy,iz,2) -  f(nx,iy,iz,2))/hx
+            elseif (ix .eq. nx+1) then
+                !Periodic
+                dfdx = 0.5*(f(2,iy,iz,2) -  f(nx,iy,iz,2))/hx
+            else
+                ! Central Difference  
+                dfdx = 0.5*(f(ix+1,iy,iz,2) -  f(ix-1,iy,iz,2))/hx
+            endif
+
+            !vt(ix,iy,iz,1) = -2* f(ix,iy-1,iz,1) / hx**2 - 2/hx* ( (f(ix+1,iy,iz,2) - f(ix-1,iy,iz,2))/(2*hx) - u(ix,iy,iz,3))
+            vt(ix,iy,iz,1) = -2* (f(ix,iy-1,iz,1) ) / hx**2 - 2/hx* ( dfdx - u(ix,iy,iz,3))
+        enddo
+    enddo
+
+    ! Component 3
+    ! inner nodes
+    do ix=1,nx+1
+        do iz=1,nz+1
+            if (iz .eq. 1)then
+                !Periodic
+                dfdz = 0.5*(f(ix,iy,2,2) -  f(ix,iy,nz,2))/hx
+            elseif (iz .eq. nz+1) then
+                !Periodic
+                dfdz = 0.5*(f(ix,iy,2,2) -  f(ix,iy,nz,2))/hx
+            else
+                ! Central Difference  
+                dfdz = 0.5*(f(ix,iy,iz+1,2) -  f(ix,iy,iz-1,2))/hx
+            endif
+
+            !vt(ix,iy,iz,3) = -2* f(ix,iy-1,iz,3) / hx**2 - 2/hx* ( (f(ix,iy,iz+1,2) - f(ix,iy,iz-1,2))/(2*hx) + u(ix,iy,iz,1))
+            vt(ix,iy,iz,3) = -2* (f(ix,iy-1,iz,3) - f(ix,iy,iz,3)   ) / hx**2 - 2/hx* ( dfdz + u(ix,iy,iz,1))
+        enddo
+    enddo
+
+    end subroutine updateBoundaryPer
 
     subroutine computeVelocities(f, u, nx, ny, nz, hx)
     implicit none
@@ -386,6 +1056,99 @@
 
     end subroutine computeVelocities
 
+    subroutine updateVelBCs(ub, nx, ny, nz, hx, hy, hz, lx, ly, lz, t )
+    implicit none
+    double precision, dimension(:,:,:,:),allocatable ::  ub
+    !double precision f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3)! 
+    double precision hx, hy, hz, lx, ly, lz, t, xi, yi, zi,pi
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
+    ! Computes the components of the velocity from the stream function derivatives
+    ! assumes a uniform grid; hx=hy=hz, though to change this is really easy.
+    ! I tested it with simple functions and with the functions used by liu the max error is 0.25%
+    pi=3.14159265358979324D0
+    ix=1
+    do iy = 1,ny+1
+        do iz =1 ,nz+1
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=exp(t)*pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            ub(ix,iy,iz,2)=exp(t)*sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            ub(ix,iy,iz,3)=exp(t)*pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+
+    ! set boundary bd_bx at x=1
+    ix=nx+1
+    do iy = 1,ny+1
+        do iz =1 ,nz+1
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=exp(t)*pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            ub(ix,iy,iz,2)=exp(t)*sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            ub(ix,iy,iz,3)=exp(t)*pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+
+    ! set boundary bd_ay at y=0
+    iy=1
+    do ix = 1,nx+1
+        do iz =1 ,nz+1
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=exp(t)*pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            ub(ix,iy,iz,2)=exp(t)*sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            ub(ix,iy,iz,3)=exp(t)*pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+
+    ! set boundary bd_by at y=1
+    iy =ny+1
+    do ix = 1,nx+1
+        do iz =1 ,nz+1
+
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=exp(t)*pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            ub(ix,iy,iz,2)=exp(t)*sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            ub(ix,iy,iz,3)=exp(t)*pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+
+    ! set boundary bd_ay at z=0
+    iz=1
+    do ix = 1,nx+1
+        do iy =1 ,ny+1
+
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=exp(t)*pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            ub(ix,iy,iz,2)=exp(t)*sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            ub(ix,iy,iz,3)=exp(t)*pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+
+    ! set boundary bd_by at z=1
+    iz = nz+1
+    do ix = 1,nx+1
+        do iy =1 ,ny+1
+
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=exp(t)*pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            ub(ix,iy,iz,2)=exp(t)*sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            ub(ix,iy,iz,3)=exp(t)*pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+
+
+    end subroutine updateVelBCs
+
     subroutine nablaCross(f, u, nx, ny, nz, hx, order)
     implicit none
     double precision, dimension(:,:,:,:),allocatable :: f, u
@@ -486,106 +1249,239 @@
                     if (order .eq. 1) then
                         df1_dy = (f(i,2,k,1) - f(i,1,k,1)) /hx 
                         df3_dy = (f(i,2,k,3) - f(i,1,k,3)) /hx 
-                        endif
-                        !second order finite diference
-                        if (order .eq. 2) then
-                            df1_dy = (-3.0/2.0*f(i,1,k,1) + 2*f(i,2,k,1) - 0.5 * f(i,3,k,1)) /hx 
-                            df3_dy = (-3.0/2.0*f(i,1,k,3) + 2*f(i,2,k,3) - 0.5 * f(i,3,k,3)) /hx 
-                        endif
-                        !third order finite difference
-                        !df1_dy = (-11.0/6.0*f(i,1,k,1) + 3.0*f(i,2,k,1) - 1.5 * f(i,3,k,1) + 1.0/3.0 * f(i,4,k,1)) /hx 
-                        !df3_dy = (-11.0/6.0*f(i,1,k,3) + 3.0*f(i,2,k,3) - 1.5 * f(i,3,k,3) + 1.0/3.0 * f(i,4,k,3)) /hx
-                        ! fourth order finite difference
+                    endif
+                    !second order finite diference
+                    if (order .eq. 2) then
+                        df1_dy = (-3.0/2.0*f(i,1,k,1) + 2*f(i,2,k,1) - 0.5 * f(i,3,k,1)) /hx 
+                        df3_dy = (-3.0/2.0*f(i,1,k,3) + 2*f(i,2,k,3) - 0.5 * f(i,3,k,3)) /hx 
+                    endif
+                    !third order finite difference
+                    !df1_dy = (-11.0/6.0*f(i,1,k,1) + 3.0*f(i,2,k,1) - 1.5 * f(i,3,k,1) + 1.0/3.0 * f(i,4,k,1)) /hx 
+                    !df3_dy = (-11.0/6.0*f(i,1,k,3) + 3.0*f(i,2,k,3) - 1.5 * f(i,3,k,3) + 1.0/3.0 * f(i,4,k,3)) /hx
+                    ! fourth order finite difference
 
-                        !df1_dy = (-25.0/12.0*f(i,1,k,1) + 4.0*f(i,2,k,1) - 3.0 * f(i,3,k,1) + 4.0/3.0 * f(i,4,k,1) - 0.25 * f(i,5,k,1)) /hx 
-                        !df3_dy = (-25.0/12.0*f(i,1,k,3) + 4.0*f(i,2,k,3) - 3.0 * f(i,3,k,3) + 4.0/3.0 * f(i,4,k,3) - 0.25 * f(i,5,k,1)) /hx
-                        if ( k .eq. 140) print *, ' 3rd order ', ' df3_dy ' ,df3_dy
+                    !df1_dy = (-25.0/12.0*f(i,1,k,1) + 4.0*f(i,2,k,1) - 3.0 * f(i,3,k,1) + 4.0/3.0 * f(i,4,k,1) - 0.25 * f(i,5,k,1)) /hx 
+                    !df3_dy = (-25.0/12.0*f(i,1,k,3) + 4.0*f(i,2,k,3) - 3.0 * f(i,3,k,3) + 4.0/3.0 * f(i,4,k,3) - 0.25 * f(i,5,k,1)) /hx
+                    if ( k .eq. 140) print *, ' 3rd order ', ' df3_dy ' ,df3_dy
 
-                    elseif(j .EQ. ny+1) then                
-                        !Backward difference
-                        if (order .eq. 1) then
-                            df1_dy = (f(i,j,k,1) - f(i,j-1,k,1)) /hx 
-                            df3_dy = (f(i,j,k,3) - f(i,j-1,k,3)) /hx 
-                        endif
-                        !second order finite diference
-                        if (order .eq. 2) then
-                            df1_dy = (3.0/2.0*f(i,j,k,1) - 2*f(i,j-1,k,1) + 0.5 * f(i,j-2,k,1)) /hx
-                            df3_dy = (3.0/2.0*f(i,j,k,3) - 2*f(i,j-1,k,3) + 0.5 * f(i,j-2,k,3)) /hx 
-                        endif
-
-                        !third order finite difference
-                        !df1_dy = (11.0/6.0*f(i,j,k,1) - 3*f(i,j-1,k,1) + 1.5 * f(i,j-2,k,1) - 1.0/3.0 * f(i,j-3,k,1)) /hx
-                        !df3_dy = (11.0/6.0*f(i,j,k,3) - 3*f(i,j-1,k,3) + 1.5 * f(i,j-2,k,3) - 1.0/3.0 * f(i,j-3,k,3)) /hx 
-                        ! fourth order finite difference
-
-                        !df1_dy = (25.0/12.0*f(i,j,k,1) - 4.0*f(i,j-1,k,1) + 3.0 * f(i,j-2,k,1) - 4.0/3.0 * f(i,j-3,k,1) - 0.25 * f(i,j-4,k,1) ) /hx
-                        !df3_dy = (25.0/12.0*f(i,j,k,3) - 4.0*f(i,j-1,k,3) + 3.0 * f(i,j-2,k,3) - 4.0/3.0 * f(i,j-3,k,3) - 0.25 * f(i,j-4,k,3)) /hx 
-
-                    else
-                        !Central difference
-                        df1_dy = 0.5* ( f(i,j+1,k,1) - f(i,j-1,k,1))  /hx
-                        df3_dy = 0.5* ( f(i,j+1,k,3) - f(i,j-1,k,3))  /hx
+                elseif(j .EQ. ny+1) then                
+                    !Backward difference
+                    if (order .eq. 1) then
+                        df1_dy = (f(i,j,k,1) - f(i,j-1,k,1)) /hx 
+                        df3_dy = (f(i,j,k,3) - f(i,j-1,k,3)) /hx 
+                    endif
+                    !second order finite diference
+                    if (order .eq. 2) then
+                        df1_dy = (3.0/2.0*f(i,j,k,1) - 2*f(i,j-1,k,1) + 0.5 * f(i,j-2,k,1)) /hx
+                        df3_dy = (3.0/2.0*f(i,j,k,3) - 2*f(i,j-1,k,3) + 0.5 * f(i,j-2,k,3)) /hx 
                     endif
 
-                    ! Derivatives with respect of Y
-                    if(k .EQ. 1) then
-                        ! Forward difference
-                        if (order .eq. 1) then
+                    !third order finite difference
+                    !df1_dy = (11.0/6.0*f(i,j,k,1) - 3*f(i,j-1,k,1) + 1.5 * f(i,j-2,k,1) - 1.0/3.0 * f(i,j-3,k,1)) /hx
+                    !df3_dy = (11.0/6.0*f(i,j,k,3) - 3*f(i,j-1,k,3) + 1.5 * f(i,j-2,k,3) - 1.0/3.0 * f(i,j-3,k,3)) /hx 
+                    ! fourth order finite difference
+
+                    !df1_dy = (25.0/12.0*f(i,j,k,1) - 4.0*f(i,j-1,k,1) + 3.0 * f(i,j-2,k,1) - 4.0/3.0 * f(i,j-3,k,1) - 0.25 * f(i,j-4,k,1) ) /hx
+                    !df3_dy = (25.0/12.0*f(i,j,k,3) - 4.0*f(i,j-1,k,3) + 3.0 * f(i,j-2,k,3) - 4.0/3.0 * f(i,j-3,k,3) - 0.25 * f(i,j-4,k,3)) /hx 
+
+                else
+                    !Central difference
+                    df1_dy = 0.5* ( f(i,j+1,k,1) - f(i,j-1,k,1))  /hx
+                    df3_dy = 0.5* ( f(i,j+1,k,3) - f(i,j-1,k,3))  /hx
+                endif
+
+                ! Derivatives with respect of Y
+                if(k .EQ. 1) then
+                    ! Forward difference
+                    if (order .eq. 1) then
                         df1_dz = (f(i,j,2,1) - f(i,j,1,1) ) /hx 
                         df2_dz = (f(i,j,2,2) - f(i,j,1,2) ) /hx
-                        endif
-                        
-                        if (order .eq. 2) then
+                    endif
+
+                    if (order .eq. 2) then
                         df1_dz = (-3.0/2.0*f(i,j,1,1) + 2*f(i,j,2,1) - 0.5 * f(i,j,3,1) ) /hx 
                         df2_dz = (-3.0/2.0*f(i,j,1,2) + 2*f(i,j,2,2) - 0.5 * f(i,j,3,2) ) /hx
-                        endif
-                        
-                        ! third order finite difference
-                        !df1_dz = (-11.0/6.0*f(i,j,1,1) + 3*f(i,j,2,1) - 1.5 * f(i,j,3,1) + 1.0/3.0 * f(i,j,4,1)) /hx 
-                        !df2_dz = (-11.0/6.0*f(i,j,1,2) + 3*f(i,j,2,2) - 1.5 * f(i,j,3,2) + 1.0/3.0 * f(i,j,4,2)) /hx
+                    endif
 
-                    elseif (k .EQ. nz+1) then
-                        !Backward difference
-                        if (order .eq. 1) then
+                    ! third order finite difference
+                    !df1_dz = (-11.0/6.0*f(i,j,1,1) + 3*f(i,j,2,1) - 1.5 * f(i,j,3,1) + 1.0/3.0 * f(i,j,4,1)) /hx 
+                    !df2_dz = (-11.0/6.0*f(i,j,1,2) + 3*f(i,j,2,2) - 1.5 * f(i,j,3,2) + 1.0/3.0 * f(i,j,4,2)) /hx
+
+                elseif (k .EQ. nz+1) then
+                    !Backward difference
+                    if (order .eq. 1) then
                         df1_dz = (f(i,j,k,1) - f(i,j,k-1,1) ) /hx 
                         df2_dz = (f(i,j,k,2) - f(i,j,k-1,2) ) /hx
-                        end if
-                        if (order .eq. 2) then
+                    end if
+                    if (order .eq. 2) then
                         df1_dz = (3.0/2.0*f(i,j,k,1) - 2.0*f(i,j,k-1,1) + 0.5 * f(i,j,k-2,1) ) /hx 
                         df2_dz = (3.0/2.0*f(i,j,k,2) - 2.0*f(i,j,k-1,2) + 0.5 * f(i,j,k-2,2) ) /hx 
-                        endif
-                        !df1_dz = (11.0/6.0*f(i,j,k,1) - 3*f(i,j,k-1,1) + 1.5 * f(i,j,k-2,1) - 1.0/3.0 * f(i,j,k-3,1)) /hx 
-                        !df2_dz = (11.0/6.0*f(i,j,k,2) - 3*f(i,j,k-1,2) + 1.5 * f(i,j,k-2,2) - 1.0/3.0 * f(i,j,k-3,2)) /hx 
-
-
-                    else
-                        !central difference
-                        df1_dz = 0.5* ( f(i,j,k+1,1) - f(i,j,k-1,1))  /hx
-                        df2_dz = 0.5* ( f(i,j,k+1,2) - f(i,j,k-1,2))  /hx
-                        if((j .EQ. 1) .and. (k.eq. 140)) then
-
-                            print *, ' analytical ', ' df2_dz ', pi*cos(pi*zi)*sin(pi*xi) !, ' yi ', yi, ' zi ', zi
-
-                            print *, ' 2nd order ', ' df2_dz ' ,df2_dz
-
-                        endif
                     endif
+                    !df1_dz = (11.0/6.0*f(i,j,k,1) - 3*f(i,j,k-1,1) + 1.5 * f(i,j,k-2,1) - 1.0/3.0 * f(i,j,k-3,1)) /hx 
+                    !df2_dz = (11.0/6.0*f(i,j,k,2) - 3*f(i,j,k-1,2) + 1.5 * f(i,j,k-2,2) - 1.0/3.0 * f(i,j,k-3,2)) /hx 
 
-                    u(i, j, k,1) = df3_dy - df2_dz  ! df3/dy - df2/dz 
-                    u(i, j, k,2) = df1_dz - df3_dx  ! df1/dz - df3/dx
-                    u(i, j, k,3) = df2_dx - df1_dy  ! df2/dx - df1/dy
 
-                    if((j .EQ. 1) .and. (k.eq. 140) ) then
-                        print *, ' result ', u(i, j, k,1)
-                        print *, ' error ' , u(i, j, k,1) - (pi*cos(pi*yi)*sin(pi*xi) -pi*cos(pi*zi)*sin(pi*xi))
+                else
+                    !central difference
+                    df1_dz = 0.5* ( f(i,j,k+1,1) - f(i,j,k-1,1))  /hx
+                    df2_dz = 0.5* ( f(i,j,k+1,2) - f(i,j,k-1,2))  /hx
+                    if((j .EQ. 1) .and. (k.eq. 140)) then
+
+                        print *, ' analytical ', ' df2_dz ', pi*cos(pi*zi)*sin(pi*xi) !, ' yi ', yi, ' zi ', zi
+
+                        print *, ' 2nd order ', ' df2_dz ' ,df2_dz
+
                     endif
-                enddo
+                endif
+
+                u(i, j, k,1) = df3_dy - df2_dz  ! df3/dy - df2/dz 
+                u(i, j, k,2) = df1_dz - df3_dx  ! df1/dz - df3/dx
+                u(i, j, k,3) = df2_dx - df1_dy  ! df2/dx - df1/dy
+
+                if((j .EQ. 1) .and. (k.eq. 140) ) then
+                    print *, ' result ', u(i, j, k,1)
+                    print *, ' error ' , u(i, j, k,1) - (pi*cos(pi*yi)*sin(pi*xi) -pi*cos(pi*zi)*sin(pi*xi))
+                endif
             enddo
         enddo
+    enddo
 
 
     end subroutine nablaCross
 
+
+    subroutine nablaCrossPer(f, u, nx, ny, nz, hx, order)
+    implicit none
+    double precision, dimension(:,:,:,:),allocatable :: f, u
+    !double precision f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3)! 
+    double precision hx, xCoeff(3), yCoeff(3), zCoeff(3), error
+    double precision df2_dx, df3_dx, df1_dy, df3_dy, df1_dz, df2_dz, ax,bx,ay,by,az,bz,lx,ly,lz,hy,hz,pi,xi,yi,zi
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ, order
+    ! Computes the cross product (nabla X f) = u
+    ! assumes a uniform grid; hx=hy=hz, though to change this is really easy.
+    ! For a peridodic system in X and Z
+    pi=3.14159265358979324D0
+    ax = 0
+    bx = 1
+    ay = 0
+    by = 1
+    az = 0
+    bz = 1
+
+    !*******************************************************************************
+
+    ! Computing the mesh size hx in x-direction
+    lx=bx-ax
+    hx=lx/nx
+    ! Computing the mesh size hy in y-direction
+    ly=by-ay
+    hy=ly/ny
+    ! Computing the mesh size hz in z-direction
+    lz=bz-az
+    hz=lz/nz
+
+    do j=1,ny+1
+        do k=1,nz+1
+            do i=1,nx+1
+                ! Derivatives with respect of X
+                xi=hx*(i-1)/lx
+                yi=hy*(j-1)/ly
+                zi=hz*(k-1)/lz
+                if(i .EQ. 1) then
+                    !Peridodic
+                    df2_dx = 0.5* ( f(2,j,k,2) - f(nx,j,k,2))  /hx
+                    df3_dx = 0.5* ( f(2,j,k,3) - f(nx,j,k,3))  /hx             
+                    
+                elseif(i .EQ. nx+1) then
+                    !Peridodic
+                    df2_dx = 0.5* ( f(2,j,k,2) - f(nx,j,k,2))  /hx
+                    df3_dx = 0.5* ( f(2,j,k,3) - f(nx,j,k,3))  /hx   
+                else
+                    !Central difference 
+                    df2_dx = 0.5* ( f(i+1,j,k,2) - f(i-1,j,k,2))  /hx
+                    df3_dx = 0.5* ( f(i+1,j,k,3) - f(i-1,j,k,3))  /hx
+                endif
+
+                ! Derivatives with respect of Y
+                if(j .EQ. 1) then
+                    ! Forward difference
+                    !first order finite diference
+                    if (order .eq. 1) then
+                        df1_dy = (f(i,2,k,1) - f(i,1,k,1)) /hx 
+                        df3_dy = (f(i,2,k,3) - f(i,1,k,3)) /hx 
+                    endif
+                    !second order finite diference
+                    if (order .eq. 2) then
+                        df1_dy = (-3.0/2.0*f(i,1,k,1) + 2*f(i,2,k,1) - 0.5 * f(i,3,k,1)) /hx 
+                        df3_dy = (-3.0/2.0*f(i,1,k,3) + 2*f(i,2,k,3) - 0.5 * f(i,3,k,3)) /hx 
+                    endif
+                    !third order finite difference
+                    !df1_dy = (-11.0/6.0*f(i,1,k,1) + 3.0*f(i,2,k,1) - 1.5 * f(i,3,k,1) + 1.0/3.0 * f(i,4,k,1)) /hx 
+                    !df3_dy = (-11.0/6.0*f(i,1,k,3) + 3.0*f(i,2,k,3) - 1.5 * f(i,3,k,3) + 1.0/3.0 * f(i,4,k,3)) /hx
+                    ! fourth order finite difference
+
+                    !df1_dy = (-25.0/12.0*f(i,1,k,1) + 4.0*f(i,2,k,1) - 3.0 * f(i,3,k,1) + 4.0/3.0 * f(i,4,k,1) - 0.25 * f(i,5,k,1)) /hx 
+                    !df3_dy = (-25.0/12.0*f(i,1,k,3) + 4.0*f(i,2,k,3) - 3.0 * f(i,3,k,3) + 4.0/3.0 * f(i,4,k,3) - 0.25 * f(i,5,k,1)) /hx
+                    if ( k .eq. 140) print *, ' 3rd order ', ' df3_dy ' ,df3_dy
+
+                elseif(j .EQ. ny+1) then                
+                    !Backward difference
+                    if (order .eq. 1) then
+                        df1_dy = (f(i,j,k,1) - f(i,j-1,k,1)) /hx 
+                        df3_dy = (f(i,j,k,3) - f(i,j-1,k,3)) /hx 
+                    endif
+                    !second order finite diference
+                    if (order .eq. 2) then
+                        df1_dy = (3.0/2.0*f(i,j,k,1) - 2*f(i,j-1,k,1) + 0.5 * f(i,j-2,k,1)) /hx
+                        df3_dy = (3.0/2.0*f(i,j,k,3) - 2*f(i,j-1,k,3) + 0.5 * f(i,j-2,k,3)) /hx 
+                    endif
+
+                    !third order finite difference
+                    !df1_dy = (11.0/6.0*f(i,j,k,1) - 3*f(i,j-1,k,1) + 1.5 * f(i,j-2,k,1) - 1.0/3.0 * f(i,j-3,k,1)) /hx
+                    !df3_dy = (11.0/6.0*f(i,j,k,3) - 3*f(i,j-1,k,3) + 1.5 * f(i,j-2,k,3) - 1.0/3.0 * f(i,j-3,k,3)) /hx 
+                    ! fourth order finite difference
+
+                    !df1_dy = (25.0/12.0*f(i,j,k,1) - 4.0*f(i,j-1,k,1) + 3.0 * f(i,j-2,k,1) - 4.0/3.0 * f(i,j-3,k,1) - 0.25 * f(i,j-4,k,1) ) /hx
+                    !df3_dy = (25.0/12.0*f(i,j,k,3) - 4.0*f(i,j-1,k,3) + 3.0 * f(i,j-2,k,3) - 4.0/3.0 * f(i,j-3,k,3) - 0.25 * f(i,j-4,k,3)) /hx 
+
+                else
+                    !Central difference
+                    df1_dy = 0.5* ( f(i,j+1,k,1) - f(i,j-1,k,1))  /hx
+                    df3_dy = 0.5* ( f(i,j+1,k,3) - f(i,j-1,k,3))  /hx
+                endif
+
+                ! Derivatives with respect of Z
+                if(k .EQ. 1) then
+                    !Periodic
+                    df1_dz = 0.5* ( f(i,j,2,1) - f(i,j,nz,1))  /hx
+                    df2_dz = 0.5* ( f(i,j,2,2) - f(i,j,nz,2))  /hx
+
+                elseif (k .EQ. nz+1) then
+                    !Periodic
+                    df1_dz = 0.5* ( f(i,j,2,1) - f(i,j,nz,1))  /hx
+                    df2_dz = 0.5* ( f(i,j,2,2) - f(i,j,nz,2))  /hx
+                else
+                    !central difference
+                    df1_dz = 0.5* ( f(i,j,k+1,1) - f(i,j,k-1,1))  /hx
+                    df2_dz = 0.5* ( f(i,j,k+1,2) - f(i,j,k-1,2))  /hx
+                endif
+
+                u(i, j, k,1) = df3_dy - df2_dz  ! df3/dy - df2/dz 
+                u(i, j, k,2) = df1_dz - df3_dx  ! df1/dz - df3/dx
+                u(i, j, k,3) = df2_dx - df1_dy  ! df2/dx - df1/dy
+
+                if((j .EQ. 1) .and. (k.eq. 140) ) then
+                    print *, ' result ', u(i, j, k,1)
+                    print *, ' error ' , u(i, j, k,1) - (pi*cos(pi*yi)*sin(pi*xi) -pi*cos(pi*zi)*sin(pi*xi))
+                endif
+            enddo
+        enddo
+    enddo
+
+
+    end subroutine nablaCrossPer
+    
+    
     subroutine computeLaplacian(vt, nx, ny, nz, hx, hy, hz, laplacian)
     double precision, dimension(:,:,:,:),allocatable :: vt, laplacian
     double precision hx, hy, hz
@@ -609,6 +1505,54 @@
     ! the computation over the inner nodes seems ok. I tested it with the function from Liu.
 
     end subroutine computeLaplacian
+
+    subroutine computeLaplacianPer(vt, nx, ny, nz, hx, hy, hz, laplacian)
+    double precision, dimension(:,:,:,:),allocatable :: vt, laplacian
+    double precision hx, hy, hz, dvtdx, dvtdz
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
+    !Computes the laplacian for a periodic function in the X and Z direction
+
+    ! Need to compute the laplacian just for inner nodes, and eventually if we have periodic conditions
+    ! need to evaluate it in the periodic boundaries. 
+    do ix=1,nx+1
+        do iy=2,ny
+            do iz=1,nz+1
+                do i=1,3
+                    if( ix .eq. 1 )then
+                        ! apply periodicity in X
+                        dvtdx = -2*vt(ix,iy,iz,i)+vt(2,iy,iz,i)+vt(nx,iy,iz,i)
+
+                    elseif(ix .eq. nx+1) then    
+                        ! apply periodicity in X
+                        dvtdx = -2*vt(ix,iy,iz,i)+vt(2,iy,iz,i)+vt(nx,iy,iz,i)
+                    else
+                        ! inner node
+                        dvtdx = -2*vt(ix,iy,iz,i)+vt(ix-1,iy,iz,i)+vt(ix+1,iy,iz,i)                       
+                    endif
+
+                    if( iz .eq. 1 )then
+                        ! apply periodicity in Z
+                        dvtdz = -2*vt(ix,iy,iz,i)+vt(ix,iy,2,i)+vt(ix,iy,nz,i)
+
+                    elseif(iz .eq. nz+1) then    
+                        ! apply periodicity in Z
+                        dvtdz = -2*vt(ix,iy,iz,i)+vt(ix,iy,2,i)+vt(nx,iy,nz,i)
+                    else
+                        ! inner node
+                        dvtdz = -2*vt(ix,iy,iz,i)+vt(ix,iy,iz-1,i)+vt(ix,iy,iz+1,i)                       
+                    endif
+
+
+                    laplacian(ix,iy,iz,i)= ( dvtdx  ) / hx**2 &
+                    +( -2*vt(ix,iy,iz,i)+vt(ix,iy-1,iz,i)+vt(ix,iy+1,iz,i)  ) / hx**2 &
+                    +( dvtdz  ) / hx**2 
+
+                enddo
+            enddo
+        enddo
+    enddo
+    end subroutine computeLaplacianPer
+
 
     subroutine computeConvectiveTermDirect(vt, u, conv, nx, ny, nz, hx, hy, hz)
     double precision, dimension(:,:,:,:),allocatable :: vt, u, conv
@@ -666,8 +1610,9 @@
     allocate(WxU(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3) )
     WxU=0
     vt=0
-    ! Computes the convective term from the stream function
+    ! Computes the convective term just using the stream functions
     ! as in (nabla X ( nabla X sf) ) X nabla X sf 
+    !is eq 3.4 in Lius paper
     ! by now we already have the velocity computed from the stream function, 
 
     ! we need to compute the vorticity from the velocity with w = nabla x u
@@ -694,11 +1639,53 @@
     print *, 'WxU numerical ' , WxU(ix,iy,iz,1)
     print *, u(ix,iy,iz,3) , ' ', vt(ix,iy,iz,2),' ' , u(ix,iy,iz,2),' ',vt(ix,iy,iz,3)
     ! the convective term is nabla x W x U
-    conv = WxU 
+    !conv = WxU 
 
-    !call nablaCross(WxU, conv , nx, ny, nz, hx)
+    call nablaCross(WxU, conv , nx, ny, nz, hx,2)
     !conv(1,:,:,:) =0
     deallocate(WxU,vt)
     end subroutine computeConvectiveTermSF
 
+    subroutine computeConvectiveTermSFPer(f, u, conv, nx, ny, nz, hx, hy, hz)
+    double precision, dimension(:,:,:,:),allocatable :: f, u, conv, vt, WxU
+    double precision hx, hy, hz
+    integer nx,ny,nz, i, j, k, ix, ix2, iy, iy2, iz, iz2, indexX, indexY, indexZ
+    allocate(WxU(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3) )
+    WxU=0
+    vt=0
+    ! Computes the convective term just using the stream functions
+    ! as in (nabla X ( nabla X sf) ) X nabla X sf 
+    !is eq 3.4 in Lius paper
+    ! by now we already have the velocity computed from the stream function, 
+
+    ! we need to compute the vorticity from the velocity with w = nabla x u
+
+    call nablaCrossPer(u, vt, nx, ny, nz, hx,2) ! here we get the vorticity
+    !call nablaCross(f, vt, nx, ny, nz, hx) ! here we get the velocity
+
+    ! Now we need to compute the cross product WxU
+
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+                WxU(ix,iy,iz,1) = u(ix,iy,iz,3)*vt(ix,iy,iz,2) - u(ix,iy,iz,2)*vt(ix,iy,iz,3)
+                WxU(ix,iy,iz,2) = u(ix,iy,iz,1)*vt(ix,iy,iz,3) - u(ix,iy,iz,3)*vt(ix,iy,iz,1)
+                WxU(ix,iy,iz,3) = u(ix,iy,iz,2)*vt(ix,iy,iz,1) - u(ix,iy,iz,1)*vt(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    ix=1
+    iy=ny
+    iz=nz
+    print *, 'u numerical ' , u(ix,iy,iz,1), ' ', u(ix,iy,iz,2), ' ', u(ix,iy,iz,3)
+    print *, 'vt numerical ' , vt(ix,iy,iz,1), ' ', vt(ix,iy,iz,2), ' ', vt(ix,iy,iz,3)
+    print *, 'WxU numerical ' , WxU(ix,iy,iz,1)
+    print *, u(ix,iy,iz,3) , ' ', vt(ix,iy,iz,2),' ' , u(ix,iy,iz,2),' ',vt(ix,iy,iz,3)
+    ! the convective term is nabla x W x U
+    !conv = WxU 
+
+    call nablaCrossPer(WxU, conv , nx, ny, nz, hx,2)
+    !conv(1,:,:,:) =0
+    deallocate(WxU,vt)
+    end subroutine computeConvectiveTermSFPer
     end module poissonSolveJacobi

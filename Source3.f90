@@ -414,10 +414,10 @@
     print *, u(ix,iy,iz,3) , ' ', vt(ix,iy,iz,2),' ' , u(ix,iy,iz,2),' ',vt(ix,iy,iz,3)
     
     
-    convComp = WxU
+    !convComp = WxU
     ! Compute velocity from the stream function 
     call nablaCross(f, u, nx, ny, nz, hx,1)
-    !For some reason that I dont get for the function Im testing the velocity has to be computed using first order FD at the borders, 
+    !For some reason that I dont understand for the function Im testing the velocity has to be computed using first order FD at the borders, 
     !while the vorticity with a second order. This will lead to the smallest error. 
 
     ! Computes the laplacian of the 3D function

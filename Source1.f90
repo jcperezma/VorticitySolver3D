@@ -9,13 +9,14 @@
     implicit none
     integer nx,ny,nz, frame
     ! Note that the size of the transform nx must be even !!!
-    parameter(nx=31, ny=31, nz=31)
+    parameter(nx=15, ny=15, nz=15)
     double precision pi
     parameter(pi=3.14159265358979324D0)
     integer ix, iy, iz, i, stat, j, maxIter, iter
     integer ipar(128)
     double precision ax, bx, ay, by, az, bz, lx, ly, lz, hx, hy, hz, xi, yi, zi, cx, cy, cz
-    double precision dt, t , endTime, mu, Uwallbottom, Uwalltop, Uwallleft, Uwallright
+    double precision dt, t , endTime, mu, Uwallbottom, Uwalltop, Uwallleft, Uwallright, eta
+    
     ! for 2D problems
     !double precision f(nx+1,ny+1), u(nx+1,ny+1), vt(nx+1,ny+1), vtnew(nx+1,ny+1) !for 2D
     !double precision bd_ax((ny+1)), bd_bx((ny+1)), bd_ay((nx+1)), bd_by((nx+1)) ! for 2D
@@ -28,24 +29,27 @@
     integer :: STATUS = 0
            
     ! For 3D Problems
-     double precision, dimension(:,:,:,:),allocatable  :: f, u, vt, vtnew, err! for 3D
+     double precision, dimension(:,:,:,:),allocatable  :: f, u, vt, vtnew, err, convTerm, viscousTerm, ub, fb, nablacrossfb ! for 3D
      !double precision bd_ax((ny+1),(nz+1)), bd_bx((ny+1),(nz+1)), bd_ay((nx+1),(nz+1)), bd_by((nx+1),(nz+1)), bd_az((nx+1),(ny+1)), bd_bz((nx+1),(ny+1)) for 3D   
      !character(6) BCtype 
      !double precision dpar(5*(nx+ny)/2+9)
      
-     allocate(f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3), err(nx+1,ny+1,nz+1,3))
-     
+     allocate(f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3), err(nx+1,ny+1,nz+1,3), fb(nx+1,ny+1,nz+1,3), nablacrossfb(nx+1,ny+1,nz+1,3))
+     allocate(convTerm(nx+1,ny+1,nz+1,3), viscousTerm(nx+1,ny+1,nz+1,3), ub(nx+1,ny+1,nz+1,3))
      
     dt = 0.0002
     t=0
-    endTime = 2.4  !1.2
-
-    useMKL = 0
-    printFrames =0
-    maxIter = 200
-    errorTol = 0.001
+    endTime = 1  !1.2
     
-    mu = 0.1
+    useMKL = 0 !no
+    printFrames =0 ! no
+    maxIter = 200
+    errorTol = 0.0001
+    ub=0
+    fb=0
+    convTerm=0
+    viscousTerm=0
+    eta = 0.1
     Uwalltop = 1
     Uwallbottom = -1
     Uwallleft = 0
@@ -82,10 +86,10 @@
     
     
     !******************** Test Unit **********************************
-    call testConvTermComputationSF(f, u, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
+    !call testConvTermComputationSF(f, u, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
    
-    print *, 'This program is going to exit.'
-    call EXIT(STATUS)
+    !print *, 'This program is going to exit.'
+    !call EXIT(STATUS)
       !******************** end of Test Unit **********************************  
 
     ! Initialize all variables
@@ -105,143 +109,172 @@
         enddo
     enddo
 
-    ! Setting the type of the boundary conditions on each side of the rectangular
-    ! domain:
-    ! On the boundary laying on the line x=0(=ax) Newmann boundary condition
-    ! will be used
-    ! On the boundary laying on the line x=1(=bx) Newmann boundary condition
-    ! will be used
-    ! On the boundary laying on the line y=0(=ay) Dirichlet boundary condition
-    ! will be used
-    ! On the boundary laying on the line y=1(=by) Dirichlet boundary condition
-    !BCtype = 'PPDD' !2D
-
-    ! Setting the values at the boundary for the function f(x,y,z,i) 
-    
+    ! Set the boundary conditions for the stream function, and initialize the velocities ub at the boundaries
     ! There are 6 faces, the stream function has 3 components. set dirichlet boundary conditions
     ! set boundary bd_bx at x=0
+    ix=1
     do iy = 1,ny+1
         do iz =1 ,nz+1
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
             do i=1,3
             f(1,iy,iz,i)=0
             enddo
+            ub(ix,iy,iz,1)=0
+            ub(ix,iy,iz,2)=0
+            ub(ix,iy,iz,3)=0
+            !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            !ub(ix,iy,iz,2)=sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            !ub(ix,iy,iz,3)=pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
         enddo
     enddo
 
     ! set boundary bd_bx at x=1
+    ix=nx+1
     do iy = 1,ny+1
         do iz =1 ,nz+1
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
             do i=1,3
             f(nx+1,iy,iz,i)=0
             enddo
+            ub(ix,iy,iz,1)=0
+            ub(ix,iy,iz,2)=0
+            ub(ix,iy,iz,3)=0
+            !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            !ub(ix,iy,iz,2)=sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            !ub(ix,iy,iz,3)=pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
         enddo
     enddo
 
-    ! set boundary bd_ay at y=0
-    do ix = 1,nx+1
-        do iz =1 ,nz+1
-            do i=1,3
-                f(ix,1,iz,i)=0 !-0.5 
-            enddo
-        enddo
-    enddo
     
-    ! set boundary bd_by at y=1
-    do ix = 1,nx+1
-        do iz =1 ,nz+1
-            do i=1,3
-                f(ix,ny+1,iz,i)=0 !-0.5 
-            enddo
-        enddo
-    enddo
     
     ! set boundary bd_ay at z=0
+    iz=1
     do ix = 1,nx+1
         do iy =1 ,ny+1
             do i=1,3
                 f(ix,iy,1,i)=0 !-0.5 
             enddo
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=0
+            ub(ix,iy,iz,2)=0
+            ub(ix,iy,iz,3)=0
+            !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            !ub(ix,iy,iz,2)=sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            !ub(ix,iy,iz,3)=pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
         enddo
     enddo
     
     ! set boundary bd_by at z=1
+    iz = nz+1
     do ix = 1,nx+1
         do iy =1 ,ny+1
             do i=1,3
                 f(ix,iy,nz+1,i)=0 !-0.5 
             enddo
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=0
+            ub(ix,iy,iz,2)=0
+            ub(ix,iy,iz,3)=0
+            !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            !ub(ix,iy,iz,2)=sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            !ub(ix,iy,iz,3)=pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+    
+    ! set boundary bd_ay at y=0
+    iy=1
+    do ix = 1,nx+1
+        do iz =1 ,nz+1
+            do i=1,3
+                f(ix,1,iz,i)=0 !-0.5
+            enddo
+            f(ix,iy,iz,3)=-0.5
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=1
+            ub(ix,iy,iz,2)=0
+            ub(ix,iy,iz,3)=0
+            !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            !ub(ix,iy,iz,2)=sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            !ub(ix,iy,iz,3)=pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+        enddo
+    enddo
+    
+    ! set boundary bd_by at y=1
+    iy =ny+1
+    do ix = 1,nx+1
+        do iz =1 ,nz+1
+            do i=1,3
+                f(ix,ny+1,iz,i)=0 !-0.5 
+            enddo
+            f(ix,ny+1,iz,3)=0.5
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            ub(ix,iy,iz,1)=1
+            ub(ix,iy,iz,2)=0
+            ub(ix,iy,iz,3)=0
+            !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            !ub(ix,iy,iz,2)=sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            !ub(ix,iy,iz,3)=pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
         enddo
     enddo
     
     frame =1
-
+    vtnew =0
+    vt = 0
+    
+    !Set point force in the center of the box in the negative x direction
+    
+    fb(8,8,8,1) = -100
+    
+    call nablaCrossPer(fb, nablacrossfb, nx, ny, nz, hx, 2)
 
     ! Main loop
     DO WHILE ( t .LT. endTime ) 
-      
+        !call updateVelBCs(ub, nx, ny, nz, hx, hy, hz, lx, ly, lz, t )
+            
         !1.  Solve the poisson equation for each component of the stream function    
             
-        call solvePoisson3DVorticity(f, vt, vtnew, nx, ny, nz, hx, maxIter, 1, errorTol) ! first component of stream function
-        call solvePoisson3DVorticity(f, vt, vtnew, nx, ny, nz, hx, maxIter, 2, errorTol) ! second component of stream function
-        call solvePoisson3DVorticity(f, vt, vtnew, nx, ny, nz, hx, maxIter, 3, errorTol) ! third component of stream function
+        call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 1, errorTol) ! first component of stream function
+        call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 2, errorTol) ! second component of stream function
+        call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 3, errorTol) ! third component of stream function
 
         vt = vtnew
 
         
-        !2. Find the velocity u form the stram function to simplify computations afterwards
+        !2. Find the velocity u from the stream function
         
-        call computeVelocities(f, u, nx, ny, nz, hx)
+        call nablaCrossPer(f, u, nx, ny, nz, hx, 2)
         
         !3. Compute the vorticity at the boundaries
         
-        call updateBoundary(f, vt, vtnew, u, nx, ny, nz, hx)
-        ! TODO update edges and corners 
+        call updateBoundaryPer(f, vtnew, ub, nx, ny, nz, hx)
+       
         
+        !vtnew = vt
+
+        !4. advance the vorticity in inner nodes
         
-        ! Wall x = 0    
-        !vt(1:nx+1,1)= 2/hy**2*(f(1:nx+1,1)- f(1:nx+1,2)) + 2* Uwallbottom /hy 
-        !print *, 'corner bottom ', 2/hy**2*(f(1,1)- f(1,2)) + 2* Uwallbottom /hy, '  bottom next node', 2/hy**2*(f(2,1)- f(2,2)) + 2* Uwallbottom /hy  
-
-        ! Wall x = 1    
-        !vt(1:nx+1,ny+1)= 2/hy**2*(f(1:nx+1,ny+1)- f(1:nx+1,ny))- 2* Uwalltop /hy 
-        !print *, 'corner top ', 2/hy**2*(f(1,ny+1)- f(1,ny)) + 2* Uwallbottom /hy, '  bottom next node', 2/hy**2*(f(2,ny+1)- f(2,ny)) + 2* Uwallbottom /hy  
-
-        vtnew = vt
-
-        !4. advance the vorticity
-
-        !! inner nodes
-        !do ix = 2,nx
-        !    do iy = 2,ny
-        !        i = ix
-        !        j = iy
-        !        vtnew(ix,iy) = vt(ix,iy) + dt * ( -( f(i,j+1)-f(i,j-1) ) /(2*hy) * (vt(i+1,j)-vt(i-1,j))/(2*hx) &
-        !        + ( f(i+1,j)-f(i-1,j) )/(2*hx) * (vt(i,j+1)-vt(i,j-1))/(2*hx)   &
-        !        + mu * ( vt(i+1,j)+vt(i-1,j)+vt(i,j+1) + vt(i,j-1) - 4* vt(i,j))/(hx*hy) )
-        !    enddo            
-        !enddo
-        !
-        !! left Wall
-        !do iy = 2,ny
-        !    i = 1
-        !    j = iy
-        !    vtnew(1,iy) = vt(1,iy) + dt * ( -( f(i,j+1)-f(i,j-1) ) /(2*hy) * (vt(2,j)-vt(nx,j))/(2*hx) &
-        !    + ( f(2,j)-f(nx,j) )/(2*hx) * (vt(i,j+1)-vt(i,j-1))/(2*hx)   &
-        !    + mu * ( vt(2,j)+vt(nx,j)+vt(i,j+1) + vt(i,j-1) - 4* vt(i,j))/(hx*hy) )
-        !enddo
-        !
-        !
-        !! right wall
-        !do ix = 2,nx
-        !    do iy = 2,ny
-        !        i = nx+1
-        !        j = iy
-        !        vtnew(nx+1,iy) = vt(ix,iy) + dt * ( -( f(i,j+1)-f(i,j-1) ) /(2*hy) * (vt(2,j)-vt(nx,j))/(2*hx) &
-        !        + ( f(2,j)-f(nx,j) )/(2*hx) * (vt(i,j+1)-vt(i,j-1))/(2*hx)   &
-        !        + mu * ( vt(2,j)+vt(nx,j)+vt(i,j+1) + vt(i,j-1) - 4* vt(i,j))/(hx*hy) )
-        !    enddo            
-        !enddo
+        ! Computes convective term
+        ! nabla X ( vt X u)
+        call computeConvectiveTermSFPer(f, u, convTerm, nx, ny, nz, hx, hy, hz)
         
+        ! Computes Viscous term 
+        ! (nabla dot nabla) vt
+        call computeLaplacianPer(vtnew, nx, ny, nz, hx, hy, hz, viscousTerm)
+        
+        ! explicit euler on inner nodes        
+        vtnew(1:nx+1,2:ny,1:nz+1,:) = vtnew(1:nx+1,2:ny,1:nz+1,:) + dt * ( eta * viscousTerm(1:nx+1,2:ny,1:nz+1,:) - convTerm(1:nx+1,2:ny,1:nz+1,:) + nablacrossfb(1:nx+1,2:ny,1:nz+1,:) ) 
         !print *, ' sf(2,2) ' , f(2,2)
     
     if (printFrames) then
@@ -279,8 +312,10 @@
         frame = frame+1
     END DO 
 
+    !Compute Velocity
+    call nablaCrossPer(f, u, nx, ny, nz, hx, 2)
 
-    print *, ipar
+    !print *, ipar
     ! Printing the final results
     write(*,10) nx
     write(*,11) ny
@@ -293,29 +328,293 @@
 
     print *, nx, ny
 
-    open(4,file='results.txt')
+    open(4,file='vt1.txt')
     !write (4,*), ubound(hinges,1)
 
     write (4,*), nx+1,ny+1, nz+1
     write (4,*), hx,hy,hz
     do ix=1,nx+1
         do iy=1,ny+1
-            write(4,*) vtnew(ix,iy,iz,i)
+            do iz=1,nz+1
+            write(4,*) vtnew(ix,iy,iz,1)
+            enddo
         enddo
     enddo
     close(4)
-
-    open(4,file='results2.txt')
+    open(4,file='vt2.txt')
     !write (4,*), ubound(hinges,1)
 
     write (4,*), nx+1,ny+1, nz+1
     write (4,*), hx,hy,hz
     do ix=1,nx+1
         do iy=1,ny+1
-            write(4,*) f(ix,iy,iz,i)
+            do iz=1,nz+1
+            write(4,*) vtnew(ix,iy,iz,2)
+            enddo
         enddo
     enddo
     close(4)
+    open(4,file='vt3.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) vtnew(ix,iy,iz,3)
+            enddo
+        enddo
+    enddo
+    close(4)
+
+    open(4,file='sf1.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) f(ix,iy,iz,1)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='sf2.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) f(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='sf3.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) f(ix,iy,iz,3)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='results3.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) ub(ix,iy,iz,1)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='u1.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) u(ix,iy,iz,1)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='u2.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) u(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='u3.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) u(ix,iy,iz,3)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='conv1.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) convTerm(ix,iy,iz,1)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='conv2.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) convTerm(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='conv3.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) convTerm(ix,iy,iz,3)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='visc1.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) viscousTerm(ix,iy,iz,1)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='visc2.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) viscousTerm(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='visc3.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) viscousTerm(ix,iy,iz,3)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    
+        open(4,file='assembledVelResults.txt')
+    !write (4,*), ubound(hinges,1)
+    write(4,"(A2, A2, A2, A3, A3, A2)") 'x ','y ', 'z ', 'u1 ', 'u2 ', 'u3 '  
+    do iz=1,nz+1
+        do iy=1,ny+1
+    do ix=1,nx+1
+        
+            
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            write(4,"( f6.2, A1, f6.2, A1, f6.2, A1, f6.2, A1, f6.2, A1, f6.2 )") xi, ' ', yi, ' ', zi ,' ',u(ix,iy,iz,1),' ',u(ix,iy,iz,2),' ',u(ix,iy,iz,3)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    do ix = 1,nx+1
+    do iy = 1,ny+1
+        do iz =1 ,nz+1
+            xi=hx*(ix-1)/lx
+            yi=hy*(iy-1)/ly
+            zi=hz*(iz-1)/lz
+            f(ix,iy,iz,1)=  sin(pi*yi)*sin(pi*zi) ! right hand side ! yi**2+zi**2  !
+            f(ix,iy,iz,2)=  sin(pi*zi)*sin(pi*xi) ! right hand side ! xi**2+zi**2  !
+            f(ix,iy,iz,3)=  sin(pi*xi)*sin(pi*yi) ! right hand side ! xi**2+yi**2  !
+            u(ix,iy,iz,1)=exp(t)*pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
+            u(ix,iy,iz,2)=exp(t)*sin(pi*yi)*pi*cos(pi*zi)-sin(pi*yi)*pi*cos(pi*xi)
+            u(ix,iy,iz,3)=exp(t)*pi*cos(pi*xi)*sin(pi*zi)-Pi*cos(pi*yi)*sin(pi*zi)
+            vt(ix,iy,iz,1) = 2*pi**2*f(ix,iy,iz,1)
+            vt(ix,iy,iz,2) = 2*pi**2*f(ix,iy,iz,2)
+            vt(ix,iy,iz,3) = 2*pi**2*f(ix,iy,iz,3)
+        enddo
+    enddo
+    enddo
+    
+    open(4,file='results4.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) u(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='results5.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) vt(ix,iy,iz,1)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
 
     ! Jumping over failure message
     go to 1
