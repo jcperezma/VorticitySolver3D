@@ -1,5 +1,5 @@
     module tests
-    use poissonSolveJacobi
+    use vorticitySolverUtilities
     implicit none 
     contains
 
@@ -501,5 +501,33 @@
     deallocate(err, conv, convComp,WxU)
 
     end subroutine testConvTermComputationSF
-
+    
+    subroutine testaddForce2Fb(Fb, hx, hy, hz )
+    double precision, dimension(:,:,:,:),allocatable:: Fb
+    integer:: idx, idy, idz
+    double precision :: hx, hy, hz, sumation
+    double precision, dimension(3) :: position, force, xd
+    
+    position(1) = 0.53
+    position(2) = 0.5
+    position(3) = 0.5
+    
+    force(1) = -1
+    force(2) = 0
+    force(3) = 0
+    
+    
+    
+    call addForce2Fb(position, Fb, force, hx, hy, hz )
+    
+    ! check result
+    Fb = Fb * hx*hy*hy
+    sumation = Fb(8,8,8,1)+Fb(8,9,8,1)+Fb(8,9,9,1)+Fb(8,8,9,1)+Fb(9,8,8,1)+Fb(9,9,8,1)+Fb(9,9,9,1)+Fb(9,8,9,1)
+     print *, Fb(8,8,8,1)," " ,Fb(8,9,8,1)," " ,Fb(8,9,9,1)," " ,Fb(8,8,9,1)," " ,Fb(9,8,8,1)," " ,Fb(9,9,8,1)," " ,Fb(9,9,9,1)," " ,Fb(9,8,9,1)
+    print *, sumation
+    
+    !Passed the test
+    end subroutine testaddForce2Fb
+    
+    
     end module tests

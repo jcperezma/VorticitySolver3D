@@ -1,4 +1,4 @@
-    module poissonSolveJacobi
+    module vorticitySolverUtilities
     implicit none 
     contains
     subroutine solvePoisson3DVorticity(f, vt, vtnew, nx, ny, nz, hx, maxIter, i, errorTol)
@@ -1674,9 +1674,9 @@
             enddo
         enddo
     enddo
-    ix=1
-    iy=ny
-    iz=nz
+    ix=8
+    iy=8
+    iz=8
     print *, 'u numerical ' , u(ix,iy,iz,1), ' ', u(ix,iy,iz,2), ' ', u(ix,iy,iz,3)
     print *, 'vt numerical ' , vt(ix,iy,iz,1), ' ', vt(ix,iy,iz,2), ' ', vt(ix,iy,iz,3)
     print *, 'WxU numerical ' , WxU(ix,iy,iz,1)
@@ -1688,4 +1688,113 @@
     !conv(1,:,:,:) =0
     deallocate(WxU,vt)
     end subroutine computeConvectiveTermSFPer
-    end module poissonSolveJacobi
+    
+    
+    
+    subroutine interpolateVelVort(position, velocity, vorticity, u, vt, hx, hy, hz, nx, ny, nz )
+    ! takes a position and interpolates the velocity and the vorticity 
+    ! assumes that the mesh origin is (0,0,0)
+    ! uses a trilinear interpolation
+    integer :: nx, ny, nz
+    integer:: idx, idy, idz
+    double precision :: hx, hy, hz
+    double precision, dimension(3) :: position, velocity, vorticity
+    double precision, dimension(3) :: xd, c00, c01, c10, c11, c0, c1
+    double precision, dimension(:,:,:,:),allocatable:: u, vt
+    
+    !find index of lower most index of cell containing the point
+    idx = FLOOR(position(1)/hx)
+    idy = FLOOR(position(2)/hy)
+    idz = FLOOR(position(3)/hz)
+    
+    if (idx<nx+1 .and. idx>-1 .and.  idy<ny+1 .and. idy>-1 .and.  idz<nz+1 .and. idz>-1) then   ! if the point is inside the domain.
+        
+    xd(1) = (position(1) - (idx-1)*hx )/hx
+    xd(2) = (position(2) - (idy-1)*hy )/hy
+    xd(3) = (position(3) - (idz-1)*hz )/hz
+    
+    !For Velocity
+     c00 = u(idx,idy,idz,:)    *(1-xd(1))+ u(idx+1,idy,idz,:)    *xd(1)
+     c01 = u(idx,idy,idz+1,:)  *(1-xd(1))+ u(idx+1,idy,idz+1,:)  *xd(1)
+     c10 = u(idx,idy+1,idz,:)  *(1-xd(1))+ u(idx+1,idy+1,idz,:)  *xd(1)
+     c01 = u(idx,idy+1,idz+1,:)*(1-xd(1))+ u(idx+1,idy+1,idz+1,:)*xd(1)
+     
+     c0 = c00*(1-xd(2)) + c10*xd(2)
+     c1 = c01*(1-xd(2)) + c11*xd(2)
+     
+     velocity = c0*(1-xd(3))+ c1*xd(3)
+     
+     !For Vorticity
+     c00 = vt(idx,idy,idz,:)    *(1-xd(1))+ vt(idx+1,idy,idz,:)    *xd(1)
+     c01 = vt(idx,idy,idz+1,:)  *(1-xd(1))+ vt(idx+1,idy,idz+1,:)  *xd(1)
+     c10 = vt(idx,idy+1,idz,:)  *(1-xd(1))+ vt(idx+1,idy+1,idz,:)  *xd(1)
+     c01 = vt(idx,idy+1,idz+1,:)*(1-xd(1))+ vt(idx+1,idy+1,idz+1,:)*xd(1)
+     
+     c0 = c00*(1-xd(2)) + c10*xd(2)
+     c1 = c01*(1-xd(2)) + c11*xd(2)
+     
+     vorticity = c0*(1-xd(3))+ c1*xd(3)
+    else
+        ! the point is outside of the domain
+        velocity =0
+        vorticity =0
+    end if
+    
+    end subroutine interpolateVelVort
+    
+    
+    subroutine addForce2Fb(position, Fb, force, hx, hy, hz )
+    double precision, dimension(:,:,:,:),allocatable:: Fb
+    integer:: idx, idy, idz
+    double precision :: hx, hy, hz, x0, x1, y0, y1, z0, z1
+    double precision, dimension(3) :: position, force, xd
+    
+    !find index of lower most index of cell containing the point
+    idx = FLOOR(position(1)/hx) +1
+    idy = FLOOR(position(2)/hy) +1
+    idz = FLOOR(position(3)/hz) +1
+    
+    ! convert to force per unit volume
+    force = force/ (hx*hy*hz)
+    
+    x0 = (position(1) - (idx-1)*hx )
+    y0 =  (position(2) - (idy-1)*hy )
+    z0 = (position(3) - (idz-1)*hz )
+    x1 = (position(1) - (idx)*hx )
+    y1 = (position(2) - (idy)*hy )
+    z1 = (position(3) - (idz)*hz )
+ 
+    ! For each point
+    ! point 1 0,0,0
+
+    Fb(idx,idy,idz,:) = Fb(idx,idy,idz,:) + force * ( x0 )/hx * ( y0 )/hy * ( z0 )/hz
+    !print *, Fb(idx,idy,idz,:)*(hx*hy*hz)
+    
+    ! point 2 1,0,0
+    Fb(idx+1,idy,idz,:) = Fb(idx+1,idy,idz,:) + force * ( -x1 )/hx * ( y0 )/hy * ( z0 )/hz
+
+    ! point 3 1,1,0
+    Fb(idx+1,idy+1,idz,:) = Fb(idx+1,idy+1,idz,:) + force * ( -x1 )/hx * ( -y1 )/hy * ( z0 )/hz
+
+    ! point 4 1,1.1
+    Fb(idx+1,idy+1,idz+1,:) = Fb(idx+1,idy+1,idz+1,:) + force * ( -x1 )/hx * ( -y1 )/hy * ( -z1 )/hz
+    
+    ! point 5 1,0,1
+    Fb(idx+1,idy,idz+1,:) = Fb(idx+1,idy,idz+1,:) + force * ( -x1 )/hx * ( y0 )/hy * ( -z1 )/hz
+    
+    ! point 6 0,1,1
+    Fb(idx,idy+1,idz+1,:) = Fb(idx,idy+1,idz+1,:) + force * ( x0 )/hx * ( -y1 )/hy * (-z1 )/hz
+    
+    ! point  7 0,1,0
+    Fb(idx,idy+1,idz,:) = Fb(idx,idy+1,idz,:) + force * ( x0 )/hx * ( -y1 )/hy * ( z0 )/hz
+    
+    ! point 8 0,0,1
+    Fb(idx,idy,idz+1,:) = Fb(idx,idy,idz+1,:) + force * ( x0 )/hx * ( y0 )/hy * ( -z1 )/hz
+    
+    ! Tested it, the force has the same sign in all 8 pints and their sum is equal to the force
+    
+    end subroutine addForce2Fb
+
+    
+    
+    end module vorticitySolverUtilities

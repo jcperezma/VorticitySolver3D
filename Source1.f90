@@ -4,7 +4,7 @@
     ! Include modules defined by mkl_poisson.f90 and mkl_dfti.f90 header files
     use mkl_dfti
     use mkl_poisson
-    use poissonSolveJacobi
+    use vorticitySolverUtilities
     use tests
     implicit none
     integer nx,ny,nz, frame
@@ -86,10 +86,11 @@
     
     
     !******************** Test Unit **********************************
-    !call testConvTermComputationSF(f, u, vt, nx, ny, nz, lx, ly, lz, hx, hy ,hz )
+    Fb =0
+    call testaddForce2Fb(Fb, hx, hy, hz )
    
-    !print *, 'This program is going to exit.'
-    !call EXIT(STATUS)
+    print *, 'This program is going to exit.'
+    call EXIT(STATUS)
       !******************** end of Test Unit **********************************  
 
     ! Initialize all variables
@@ -196,11 +197,11 @@
             do i=1,3
                 f(ix,1,iz,i)=0 !-0.5
             enddo
-            f(ix,iy,iz,3)=-0.5
+            !f(ix,iy,iz,3)=-0.5
             xi=hx*(ix-1)/lx
             yi=hy*(iy-1)/ly
             zi=hz*(iz-1)/lz
-            ub(ix,iy,iz,1)=1
+            ub(ix,iy,iz,1)=0
             ub(ix,iy,iz,2)=0
             ub(ix,iy,iz,3)=0
             !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
@@ -216,11 +217,11 @@
             do i=1,3
                 f(ix,ny+1,iz,i)=0 !-0.5 
             enddo
-            f(ix,ny+1,iz,3)=0.5
+            !f(ix,ny+1,iz,3)=0.5
             xi=hx*(ix-1)/lx
             yi=hy*(iy-1)/ly
             zi=hz*(iz-1)/lz
-            ub(ix,iy,iz,1)=1
+            ub(ix,iy,iz,1)=0
             ub(ix,iy,iz,2)=0
             ub(ix,iy,iz,3)=0
             !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
@@ -233,9 +234,13 @@
     vtnew =0
     vt = 0
     
-    !Set point force in the center of the box in the negative x direction
+    !Set point force in the center of the box in the  x direction
+    ! it is force per unit volume
+    fb(8,8,8,1) = 1 / (hx*hy*hz)
     
-    fb(8,8,8,1) = -100
+    
+    
+    
     
     call nablaCrossPer(fb, nablacrossfb, nx, ny, nz, hx, 2)
 
@@ -545,6 +550,48 @@
         do iy=1,ny+1
             do iz=1,nz+1
             write(4,*) viscousTerm(ix,iy,iz,3)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='ncfb1.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) nablacrossfb(ix,iy,iz,1)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='ncfb2.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) nablacrossfb(ix,iy,iz,2)
+            enddo
+        enddo
+    enddo
+    close(4)
+    
+    open(4,file='ncfb3.txt')
+    !write (4,*), ubound(hinges,1)
+
+    write (4,*), nx+1,ny+1, nz+1
+    write (4,*), hx,hy,hz
+    do ix=1,nx+1
+        do iy=1,ny+1
+            do iz=1,nz+1
+            write(4,*) nablacrossfb(ix,iy,iz,3)
             enddo
         enddo
     enddo
