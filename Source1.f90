@@ -9,7 +9,7 @@
     implicit none
     integer nx,ny,nz, frame
     ! Note that the size of the transform nx must be even !!!
-    parameter(nx=15, ny=15, nz=15)
+    parameter(nx=63, ny=63, nz=63)
     double precision pi
     parameter(pi=3.14159265358979324D0)
     integer ix, iy, iz, i, stat, j, maxIter, iter
@@ -30,7 +30,8 @@
            
     ! For 3D Problems
      double precision, dimension(:,:,:,:),allocatable  :: f, u, vt, vtnew, err, convTerm, viscousTerm, ub, fb, nablacrossfb ! for 3D
-     !double precision bd_ax((ny+1),(nz+1)), bd_bx((ny+1),(nz+1)), bd_ay((nx+1),(nz+1)), bd_by((nx+1),(nz+1)), bd_az((nx+1),(ny+1)), bd_bz((nx+1),(ny+1)) for 3D   
+     double precision, dimension(3) :: position, force
+     double precision bd_ax((ny+1),(nz+1)), bd_bx((ny+1),(nz+1)), bd_ay((nx+1),(nz+1)), bd_by((nx+1),(nz+1)), bd_az((nx+1),(ny+1)), bd_bz((nx+1),(ny+1)) !for 3D   
      !character(6) BCtype 
      !double precision dpar(5*(nx+ny)/2+9)
      
@@ -41,7 +42,7 @@
     t=0
     endTime = 1  !1.2
     
-    useMKL = 0 !no
+    useMKL = 1 !no
     printFrames =0 ! no
     maxIter = 200
     errorTol = 0.0001
@@ -86,12 +87,12 @@
     
     
     !******************** Test Unit **********************************
-    Fb =0
-    call testaddForce2Fb(Fb, hx, hy, hz )
-   
-    print *, 'This program is going to exit.'
-    call EXIT(STATUS)
-      !******************** end of Test Unit **********************************  
+    !Fb =0
+    !call testaddForce2Fb(Fb, hx, hy, hz )
+    !
+    !print *, 'This program is going to exit.'
+    !call EXIT(STATUS)
+    !******************** end of Test Unit **********************************  
 
     ! Initialize all variables
     do iy=1,ny+1
@@ -230,13 +231,29 @@
         enddo
     enddo
     
+    
+    ! Boundary conditions for MKL
+    bd_ax = 0
+    bd_bx = 0
+    bd_ay = 0
+    bd_by = 0
+    bd_az = 0
+    bd_bz = 0 
+    
     frame =1
     vtnew =0
     vt = 0
     
     !Set point force in the center of the box in the  x direction
-    ! it is force per unit volume
-    fb(8,8,8,1) = 1 / (hx*hy*hz)
+    position(1) = 0.5
+    position(2) = 0.5
+    position(3) = 0.5
+    
+    force(1) = 0.5
+    force(2) = 0
+    force(3) = 0
+    
+    call addForce2Fb(position, Fb, force, hx, hy, hz )
     
     
     
@@ -249,11 +266,22 @@
         !call updateVelBCs(ub, nx, ny, nz, hx, hy, hz, lx, ly, lz, t )
             
         !1.  Solve the poisson equation for each component of the stream function    
+        if (useMKL ) then
+            f= vtnew
+            !print *, " component 1 "
+            call solvePoisson3DVorticityPerMKL(f(:,:,:,1), bd_ax, bd_bx , bd_ay, bd_by, bd_az, bd_bz, nx, ny, nz, ax, bx, ay, by, az, bz, 1)
+            !print *, " component 2 "
+            call solvePoisson3DVorticityPerMKL(f(:,:,:,2), bd_ax, bd_bx , bd_ay, bd_by, bd_az, bd_bz, nx, ny, nz, ax, bx, ay, by, az, bz, 2)
+            !print *, " component 3 "
+            call solvePoisson3DVorticityPerMKL(f(:,:,:,3), bd_ax, bd_bx , bd_ay, bd_by, bd_az, bd_bz, nx, ny, nz, ax, bx, ay, by, az, bz, 3)
             
-        call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 1, errorTol) ! first component of stream function
-        call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 2, errorTol) ! second component of stream function
-        call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 3, errorTol) ! third component of stream function
-
+        else
+        
+            call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 1, errorTol) ! first component of stream function
+            call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 2, errorTol) ! second component of stream function
+            call solvePoisson3DVorticityPer(f, vt, vtnew, nx, ny, nz, hx, maxIter, 3, errorTol) ! third component of stream function
+        
+        end if
         vt = vtnew
 
         

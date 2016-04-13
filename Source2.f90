@@ -1,4 +1,7 @@
+ 
     module vorticitySolverUtilities
+    use mkl_dfti
+    use mkl_poisson
     implicit none 
     contains
     subroutine solvePoisson3DVorticity(f, vt, vtnew, nx, ny, nz, hx, maxIter, i, errorTol)
@@ -331,6 +334,47 @@
 
     end subroutine solvePoisson3DVorticityPer
 
+    
+    subroutine solvePoisson3DVorticityPerMKL(f, bd_ax, bd_bx , bd_ay, bd_by, bd_az, bd_bz, nx, ny, nz, ax, bx, ay, by, az, bz, i)
+    double precision dpar(5*(nx+ny)/2+9)
+    integer ipar(128), i, stat, nx, ny, nz
+    double precision :: bd_ax(:,:), bd_bx(:,:) , bd_ay(:,:), bd_by(:,:), bd_az(:,:), bd_bz(:,:)
+    double precision :: f(:,:,:)
+    character(6) BCtype
+    double precision q, ax, bx, ay, by, az, bz
+    type(DFTI_DESCRIPTOR), pointer :: xhandle, yhandle
+    
+    SELECT CASE (i) ! select component
+    CASE (1)
+        BCtype = 'PPDDPP'
+    case (2)
+        BCtype = 'PPNNPP'
+    case (3)
+        BCtype = 'PPDDPP'
+    end select
+    q=0.0
+    ipar =0
+    ! solve the poisson eq 
+    
+    call D_INIT_HELMHOLTZ_3D(ax, bx, ay, by, az, bz, nx, ny, nz, BCtype , q, ipar, dpar, stat)
+    !print *, " warning 1 "
+    !if (stat.ne.0) goto 999
+    call D_COMMIT_HELMHOLTZ_3D (f, bd_ax, bd_bx, bd_ay, bd_by, bd_az , bd_bz, xhandle, yhandle, ipar, dpar, stat)
+    !print *, " warning 2 "
+    !if (stat.ne.0) goto 999
+    call D_HELMHOLTZ_3D(f, bd_ax, bd_bx, bd_ay, bd_by, bd_az , bd_bz, xhandle, yhandle, ipar, dpar, stat)
+    !print *, " warning 3 "
+    !if (stat.ne.0) goto 999
+    call free_Helmholtz_3D(xhandle, yhandle, ipar, stat)
+    !print *, " warning 4 "
+    !if (stat.ne.0) goto 999
+    
+    ! need boundary conditions and right hand side, those are inputs
+    
+  !999 print *, 'Double precision 2D Poisson example FAILED to compute the solution...'  
+    
+    end subroutine solvePoisson3DVorticityPerMKL
+    
     subroutine updateBoundary(f, vt, u, nx, ny, nz, hx)
     double precision f(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3),u(nx+1,ny+1,nz+1,3) ! 
     double precision errorTol, error, hx, dfdx, dfdy, dfdz
@@ -1674,9 +1718,9 @@
             enddo
         enddo
     enddo
-    ix=8
-    iy=8
-    iz=8
+    ix=16
+    iy=16
+    iz=16
     print *, 'u numerical ' , u(ix,iy,iz,1), ' ', u(ix,iy,iz,2), ' ', u(ix,iy,iz,3)
     print *, 'vt numerical ' , vt(ix,iy,iz,1), ' ', vt(ix,iy,iz,2), ' ', vt(ix,iy,iz,3)
     print *, 'WxU numerical ' , WxU(ix,iy,iz,1)
