@@ -1,9 +1,19 @@
- 
+    include 'mkl_dfti.f90'
+    include 'mkl_poisson.f90'
     module vorticitySolverUtilities
     use mkl_dfti
     use mkl_poisson
     implicit none 
     contains
+    
+     function crossProd(vec1, vec2)
+    real(8), dimension (3):: crossProd, vec1, vec2
+    crossProd(1)=  vec1(2)*vec2(3)-vec1(3)*vec2(2)
+    crossProd(2)=-(vec1(1)*vec2(3)-vec1(3)*vec2(1))
+    crossProd(3)=  vec1(1)*vec2(2)-vec1(2)*vec2(1)
+     end function crossProd
+    
+     
     subroutine solvePoisson3DVorticity(f, vt, vtnew, nx, ny, nz, hx, maxIter, i, errorTol)
 
     double precision f(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3) ! 
@@ -347,16 +357,22 @@
     SELECT CASE (i) ! select component
     CASE (1)
         BCtype = 'PPDDPP'
+        bd_ay  =0
+        bd_by  =0
     case (2)
         BCtype = 'PPNNPP'
+        
     case (3)
         BCtype = 'PPDDPP'
+        bd_ay  =-0.5 ! for unidirectional flow
+        bd_by  =0.5
     end select
     q=0.0
     ipar =0
     ! solve the poisson eq 
     
     call D_INIT_HELMHOLTZ_3D(ax, bx, ay, by, az, bz, nx, ny, nz, BCtype , q, ipar, dpar, stat)
+    ipar(3)=0
     !print *, " warning 1 "
     !if (stat.ne.0) goto 999
     call D_COMMIT_HELMHOLTZ_3D (f, bd_ax, bd_bx, bd_ay, bd_by, bd_az , bd_bz, xhandle, yhandle, ipar, dpar, stat)
@@ -1800,42 +1816,48 @@
     
     ! convert to force per unit volume
     force = force/ (hx*hy*hz)
-    
+    print '(A11, e10.2,A1,e10.2,A1,e10.2 )', 'force2 ', force(1), ' ', force(2), ' ',force(3)
     x0 = (position(1) - (idx-1)*hx )
     y0 =  (position(2) - (idy-1)*hy )
     z0 = (position(3) - (idz-1)*hz )
     x1 = (position(1) - (idx)*hx )
     y1 = (position(2) - (idy)*hy )
     z1 = (position(3) - (idz)*hz )
- 
+    
+    print *, 'x0 ', x0/hx, ' y0 ', y0/hx, ' z0 ', z0/hx, 'x1 ', x1/hx, ' y1 ', y1/hx, ' z1 ', z1 /hx
     ! For each point
     ! point 1 0,0,0
 
     Fb(idx,idy,idz,:) = Fb(idx,idy,idz,:) + force * ( x0 )/hx * ( y0 )/hy * ( z0 )/hz
-    !print *, Fb(idx,idy,idz,:)*(hx*hy*hz)
+    print *, force * ( x0 )/hx * ( y0 )/hy * ( z0 )/hz
     
     ! point 2 1,0,0
     Fb(idx+1,idy,idz,:) = Fb(idx+1,idy,idz,:) + force * ( -x1 )/hx * ( y0 )/hy * ( z0 )/hz
-
+    print *, force * ( -x1 )/hx * ( y0 )/hy * ( z0 )/hz
     ! point 3 1,1,0
     Fb(idx+1,idy+1,idz,:) = Fb(idx+1,idy+1,idz,:) + force * ( -x1 )/hx * ( -y1 )/hy * ( z0 )/hz
-
+ print *, force * ( -x1 )/hx * ( -y1 )/hy * ( z0 )/hz
     ! point 4 1,1.1
     Fb(idx+1,idy+1,idz+1,:) = Fb(idx+1,idy+1,idz+1,:) + force * ( -x1 )/hx * ( -y1 )/hy * ( -z1 )/hz
-    
+     print *, force * ( -x1 )/hx * ( -y1 )/hy * ( -z1 )/hz
     ! point 5 1,0,1
     Fb(idx+1,idy,idz+1,:) = Fb(idx+1,idy,idz+1,:) + force * ( -x1 )/hx * ( y0 )/hy * ( -z1 )/hz
-    
+     print *, force * ( -x1 )/hx * ( y0 )/hy * ( -z1 )/hz
     ! point 6 0,1,1
     Fb(idx,idy+1,idz+1,:) = Fb(idx,idy+1,idz+1,:) + force * ( x0 )/hx * ( -y1 )/hy * (-z1 )/hz
-    
+     print *, force * ( x0 )/hx * ( -y1 )/hy * (-z1 )/hz
     ! point  7 0,1,0
     Fb(idx,idy+1,idz,:) = Fb(idx,idy+1,idz,:) + force * ( x0 )/hx * ( -y1 )/hy * ( z0 )/hz
-    
+     print *, force * ( x0 )/hx * ( -y1 )/hy * ( z0 )/hz
     ! point 8 0,0,1
     Fb(idx,idy,idz+1,:) = Fb(idx,idy,idz+1,:) + force * ( x0 )/hx * ( y0 )/hy * ( -z1 )/hz
+     print *, force * ( x0 )/hx * ( y0 )/hy * ( -z1 )/hz
     
+     
+     print *, ' '
+    print *, Fb(idx,idy,idz,:),Fb(idx+1,idy,idz,:), Fb(idx+1,idy+1,idz,:), Fb(idx+1,idy+1,idz+1,:), Fb(idx+1,idy,idz+1,:),Fb(idx,idy+1,idz+1,:), Fb(idx,idy+1,idz,:), Fb(idx,idy,idz+1,:)
     ! Tested it, the force has the same sign in all 8 pints and their sum is equal to the force
+    print *, 'sum ' ,Fb(idx,idy,idz,:)+Fb(idx+1,idy,idz,:)+ Fb(idx+1,idy+1,idz,:)+ Fb(idx+1,idy+1,idz+1,:)+ Fb(idx+1,idy,idz+1,:)+Fb(idx,idy+1,idz+1,:)+ Fb(idx,idy+1,idz,:)+ Fb(idx,idy,idz+1,:)
     
     end subroutine addForce2Fb
 

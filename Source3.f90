@@ -529,5 +529,38 @@
     !Passed the test
     end subroutine testaddForce2Fb
     
+   
+    subroutine testaddTorqueFb(Fb, hx, hy, hz )
+    double precision, dimension(:,:,:,:),allocatable:: Fb
+    integer:: idx, idy, idz
+    double precision :: hx, hy, hz, sumation, D
+    double precision, dimension(3) :: position, force, xd, normVector
+    
+    position(1) = 0.53
+    position(2) = 0.5
+    position(3) = 0.5
+    
+    force(1) = 0
+    force(2) = 0
+    force(3) = 1
+    
+    D= hx/100
+    normVector(1) =1
+    normVector(2) =1
+    normVector(3) = (-force(1) - force(2) )/force(3)
+    
+    normVector = normVector / sqrt(dot_product(normVector,normVector))
+    
+    call addForce2Fb(position, Fb, force, hx, hy, hz )
+    
+    ! check result
+    Fb = Fb * hx*hy*hy
+    sumation = Fb(8,8,8,1)+Fb(8,9,8,1)+Fb(8,9,9,1)+Fb(8,8,9,1)+Fb(9,8,8,1)+Fb(9,9,8,1)+Fb(9,9,9,1)+Fb(9,8,9,1)
+     print *, Fb(8,8,8,1)," " ,Fb(8,9,8,1)," " ,Fb(8,9,9,1)," " ,Fb(8,8,9,1)," " ,Fb(9,8,8,1)," " ,Fb(9,9,8,1)," " ,Fb(9,9,9,1)," " ,Fb(9,8,9,1)
+    print *, sumation
+    
+    !Passed the test
+    end subroutine testaddTorqueFb
+    
     
     end module tests

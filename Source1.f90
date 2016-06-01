@@ -1,9 +1,7 @@
-    include 'mkl_dfti.f90'
-    include 'mkl_poisson.f90'
+  
     program Poisson_3D_double_precision
     ! Include modules defined by mkl_poisson.f90 and mkl_dfti.f90 header files
-    use mkl_dfti
-    use mkl_poisson
+    
     use vorticitySolverUtilities
     use tests
     implicit none
@@ -15,22 +13,22 @@
     integer ix, iy, iz, i, stat, j, maxIter, iter
     integer ipar(128)
     double precision ax, bx, ay, by, az, bz, lx, ly, lz, hx, hy, hz, xi, yi, zi, cx, cy, cz
-    double precision dt, t , endTime, mu, Uwallbottom, Uwalltop, Uwallleft, Uwallright, eta
+    double precision dt, t , endTime, mu, Uwallbottom, Uwalltop, Uwallleft, Uwallright, eta, rho
     
     ! for 2D problems
     !double precision f(nx+1,ny+1), u(nx+1,ny+1), vt(nx+1,ny+1), vtnew(nx+1,ny+1) !for 2D
     !double precision bd_ax((ny+1)), bd_bx((ny+1)), bd_ay((nx+1)), bd_by((nx+1)) ! for 2D
     !character(4) BCtype
     !double precision dpar((5*nx/2+7))  
-    double precision q, errorTol, error
+    double precision q, errorTol, error, D
     character(len=1024) :: filename
-    logical     :: useMKL, printFrames
+    logical     :: useMKL, printFrames, isStokesFlow
     type(DFTI_DESCRIPTOR), pointer :: xhandle, yhandle
     integer :: STATUS = 0
            
     ! For 3D Problems
      double precision, dimension(:,:,:,:),allocatable  :: f, u, vt, vtnew, err, convTerm, viscousTerm, ub, fb, nablacrossfb ! for 3D
-     double precision, dimension(3) :: position, force
+     double precision, dimension(3) :: position, force, normVector
      double precision bd_ax((ny+1),(nz+1)), bd_bx((ny+1),(nz+1)), bd_ay((nx+1),(nz+1)), bd_by((nx+1),(nz+1)), bd_az((nx+1),(ny+1)), bd_bz((nx+1),(ny+1)) !for 3D   
      !character(6) BCtype 
      !double precision dpar(5*(nx+ny)/2+9)
@@ -38,19 +36,22 @@
      allocate(f(nx+1,ny+1,nz+1,3), u(nx+1,ny+1,nz+1,3), vt(nx+1,ny+1,nz+1,3), vtnew(nx+1,ny+1,nz+1,3), err(nx+1,ny+1,nz+1,3), fb(nx+1,ny+1,nz+1,3), nablacrossfb(nx+1,ny+1,nz+1,3))
      allocate(convTerm(nx+1,ny+1,nz+1,3), viscousTerm(nx+1,ny+1,nz+1,3), ub(nx+1,ny+1,nz+1,3))
      
+     
     dt = 0.0002
     t=0
-    endTime = 1  !1.2
+    endTime = 0.02  !1.2
     
-    useMKL = 1 !no
-    printFrames =0 ! no
+    isStokesFlow =1 !0 no, 1 yes 
+    useMKL = 1 !0 no, 1 yes
+    printFrames =0 ! 0 no, 1 yes
     maxIter = 200
     errorTol = 0.0001
     ub=0
     fb=0
     convTerm=0
     viscousTerm=0
-    eta = 0.1
+    eta = 1.6
+    rho = 1000
     Uwalltop = 1
     Uwallbottom = -1
     Uwallleft = 0
@@ -198,11 +199,11 @@
             do i=1,3
                 f(ix,1,iz,i)=0 !-0.5
             enddo
-            !f(ix,iy,iz,3)=-0.5
+            f(ix,iy,iz,3)=-0.5
             xi=hx*(ix-1)/lx
             yi=hy*(iy-1)/ly
             zi=hz*(iz-1)/lz
-            ub(ix,iy,iz,1)=0
+            ub(ix,iy,iz,1)=1
             ub(ix,iy,iz,2)=0
             ub(ix,iy,iz,3)=0
             !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
@@ -218,11 +219,11 @@
             do i=1,3
                 f(ix,ny+1,iz,i)=0 !-0.5 
             enddo
-            !f(ix,ny+1,iz,3)=0.5
+            f(ix,ny+1,iz,3)=0.5
             xi=hx*(ix-1)/lx
             yi=hy*(iy-1)/ly
             zi=hz*(iz-1)/lz
-            ub(ix,iy,iz,1)=0
+            ub(ix,iy,iz,1)=1
             ub(ix,iy,iz,2)=0
             ub(ix,iy,iz,3)=0
             !ub(ix,iy,iz,1)=pi*cos(pi*yi)*sin(pi*xi)-sin(pi*xi)*Pi*cos(pi*zi)
@@ -245,20 +246,40 @@
     vt = 0
     
     !Set point force in the center of the box in the  x direction
-    position(1) = 0.5
-    position(2) = 0.5
-    position(3) = 0.5
-    
-    force(1) = 0.5
-    force(2) = 0
-    force(3) = 0
-    
-    call addForce2Fb(position, Fb, force, hx, hy, hz )
-    
-    
-    
-    
-    
+    !position(1) = 0.5
+    !position(2) = 0.5
+    !position(3) = 0.5
+    !
+    !force(1) = 0.5
+    !force(2) = 0
+    !force(3) = 0
+    !
+    !call addForce2Fb(position, Fb, force, hx, hy, hz )
+    !add a torque as a couple
+    !position(1) = 0.5
+    !position(2) = 0.5
+    !position(3) = 0.5
+    !
+    !force(1) = 0
+    !force(2) = 0
+    !force(3) = -1
+    !
+    !D= hx/10
+    !normVector(1) =1
+    !normVector(2) =1
+    !normVector(3) = (-force(1) - force(2) )/force(3)
+    !
+    !normVector = normVector / sqrt(dot_product(normVector,normVector))
+    !
+    !print *, normVector
+    !print *, ' '
+    !!call addForce2Fb(position, Fb, force, hx, hy, hz )
+    !
+    !call addForce2Fb(position+D/2*normVector, Fb, -crossProd(force,normVector)/D, hx, hy, hz )
+    !print *, ' '
+    !print *, ' '
+    !call addForce2Fb(position-D/2*normVector, Fb, crossProd(force,normVector)/D, hx, hy, hz )
+ 
     call nablaCrossPer(fb, nablacrossfb, nx, ny, nz, hx, 2)
 
     ! Main loop
@@ -300,14 +321,17 @@
         
         ! Computes convective term
         ! nabla X ( vt X u)
+        if(isStokesFlow)then
+            convTerm =0
+        else
         call computeConvectiveTermSFPer(f, u, convTerm, nx, ny, nz, hx, hy, hz)
-        
+        end if
         ! Computes Viscous term 
         ! (nabla dot nabla) vt
         call computeLaplacianPer(vtnew, nx, ny, nz, hx, hy, hz, viscousTerm)
         
         ! explicit euler on inner nodes        
-        vtnew(1:nx+1,2:ny,1:nz+1,:) = vtnew(1:nx+1,2:ny,1:nz+1,:) + dt * ( eta * viscousTerm(1:nx+1,2:ny,1:nz+1,:) - convTerm(1:nx+1,2:ny,1:nz+1,:) + nablacrossfb(1:nx+1,2:ny,1:nz+1,:) ) 
+        vtnew(1:nx+1,2:ny,1:nz+1,:) = vtnew(1:nx+1,2:ny,1:nz+1,:) + dt * ( eta * viscousTerm(1:nx+1,2:ny,1:nz+1,:)/rho - convTerm(1:nx+1,2:ny,1:nz+1,:) + nablacrossfb(1:nx+1,2:ny,1:nz+1,:)/rho ) 
         !print *, ' sf(2,2) ' , f(2,2)
     
     if (printFrames) then
@@ -591,7 +615,7 @@
     do ix=1,nx+1
         do iy=1,ny+1
             do iz=1,nz+1
-            write(4,*) nablacrossfb(ix,iy,iz,1)
+            write(4,*) fb(ix,iy,iz,1)
             enddo
         enddo
     enddo
@@ -605,7 +629,7 @@
     do ix=1,nx+1
         do iy=1,ny+1
             do iz=1,nz+1
-            write(4,*) nablacrossfb(ix,iy,iz,2)
+            write(4,*) fb(ix,iy,iz,2)
             enddo
         enddo
     enddo
@@ -619,14 +643,14 @@
     do ix=1,nx+1
         do iy=1,ny+1
             do iz=1,nz+1
-            write(4,*) nablacrossfb(ix,iy,iz,3)
+            write(4,*) fb(ix,iy,iz,3)
             enddo
         enddo
     enddo
     close(4)
     
     
-        open(4,file='assembledVelResults.txt')
+    open(4,file='assembledVelResults.txt')
     !write (4,*), ubound(hinges,1)
     write(4,"(A2, A2, A2, A3, A3, A2)") 'x ','y ', 'z ', 'u1 ', 'u2 ', 'u3 '  
     do iz=1,nz+1
